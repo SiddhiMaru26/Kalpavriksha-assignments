@@ -8,7 +8,7 @@ int main()
   char str[300000];
   printf("Enter the string you want to evaluate:\n");
   fgets(str, sizeof(str), stdin);
-  fflush(stdin);
+  
 
   // removing spaces from the string
   char temp[300000];
@@ -34,7 +34,7 @@ int main()
       if (ch != '+' && ch != '-' && ch != '*' && ch != '/')
       {
         printf("ERROR!!! INVALID INPUT");
-        exit(1);
+        return 1;
       }
     }
   }
@@ -56,22 +56,52 @@ int main()
     {
       if (op == '+')
       {
+
+        if (top + 1 >= 300000)
+         {
+            printf("ERROR!!! Stack Overflow\n");
+            return 1;
+         }
         top++;
         stack[top] = num;
       }
       else if (op == '-')
       {
+
+        if (top + 1 >= 300000)
+         {
+            printf("ERROR!!! Stack Overflow\n");
+            return 1;
+         }
         top++;
         stack[top] = num * -1;
       }
       else if (op == '*')
       {
+
+        if (top < 0)
+          {
+               printf("ERROR!!! Stack Underflow\n");
+               return 1;
+          }
         int temp = stack[top];
         temp = temp * num;
         stack[top] = temp;
       }
       else if (op == '/')
       {
+
+         if (top < 0)
+          {
+               printf("ERROR!!! Stack Underflow\n");
+               return 1;
+          }
+
+        if (num == 0)
+          {
+              printf("ERROR!!! Division by zero\n");
+              return 1;
+          }
         int temp = stack[top];
         temp = temp / num;
         stack[top] = temp;
