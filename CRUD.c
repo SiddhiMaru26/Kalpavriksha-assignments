@@ -10,6 +10,33 @@ struct User {
     int age;
 };
 
+
+int idExists(int id) {
+    struct User temp;
+    FILE *fp=fopen(FILE_NAME, "r");
+    if (!fp) return 0;
+    while (fscanf(fp, "%d %s %d", &temp.id, temp.name, &temp.age) == 3)
+        {
+        if (temp.id == id) 
+        {
+            fclose(fp);
+            return 1;
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+
+int isValidName(char *name) {
+    if (strlen(name) == 0) return 0;
+    for (int i = 0; name[i] != '\0'; i++) 
+    {
+        if (!isalpha(name[i]) && name[i] != ' ')
+            return 0;
+    }
+    return 1;
+}
+
 void addUser() {
     struct User u;
     FILE *fp = fopen(FILE_NAME, "a");
