@@ -1,125 +1,123 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
 
-#define FILE_NAME "users.txt"
+int main()
+{
+  char str[300000];
+  printf("Enter the string you want to evaluate:\n");
+  fgets(str, sizeof(str), stdin);
+  
 
-struct User {
-    int id;
-    char name[50];
-    int age;
-};
-
-void addUser() {
-    struct User u;
-    FILE *fp = fopen(FILE_NAME, "a");
-    if (!fp) {
-        printf("Cannot open file\n");
-        return;
+  // removing spaces from the string
+  char temp[300000];
+  int j = 0;
+  for (int i = 0; i < strlen(str); i++)
+  {
+    if (str[i] != ' ')
+    {
+      temp[j] = str[i];
+      j++;
     }
-    printf("Enter ID: ");
-    scanf("%d", &u.id);
-    printf("Enter Name: ");
-    scanf("%s", u.name);
-    printf("Enter Age: ");
-    scanf("%d", &u.age);
+  }
+  temp[j] = '\0';
 
-    fprintf(fp, "%d %s %d\n", u.id, u.name, u.age);
-    fclose(fp);
-    printf("User added!\n");
+  // Validating the string
+  int len = strlen(temp);
+  temp[len - 1] = '\0';
+  for (int i = 0; temp[i] != '\0'; i++)
+  {
+    char ch = temp[i];
+    if (!isdigit(ch))
+    {
+      if (ch != '+' && ch != '-' && ch != '*' && ch != '/')
+      {
+        printf("ERROR!!! INVALID INPUT");
+        return 1;
+      }
+    }
+  }
+
+  int stack[300000];
+  int top = -1;
+  int sign = 1;
+  char op = '+';
+  int num = 0;
+
+  // evaluating the result
+  for (int i = 0; i < strlen(temp); i++)
+  {
+    if (isdigit(temp[i]))
+    {
+      num = num * 10 + (temp[i] - '0');
+    }
+    if (!isdigit(temp[i]) || temp[i + 1] == '\0')
+    {
+      if (op == '+')
+      {
+
+        if (top + 1 >= 300000)
+         {
+            printf("ERROR!!! Stack Overflow\n");
+            return 1;
+         }
+        top++;
+        stack[top] = num;
+      }
+      else if (op == '-')
+      {
+
+        if (top + 1 >= 300000)
+         {
+            printf("ERROR!!! Stack Overflow\n");
+            return 1;
+         }
+        top++;
+        stack[top] = num * -1;
+      }
+      else if (op == '*')
+      {
+
+        if (top < 0)
+          {
+               printf("ERROR!!! Stack Underflow\n");
+               return 1;
+          }
+        int temp = stack[top];
+        temp = temp * num;
+        stack[top] = temp;
+      }
+      else if (op == '/')
+      {
+
+         if (top < 0)
+          {
+               printf("ERROR!!! Stack Underflow\n");
+               return 1;
+          }
+
+        if (num == 0)
+          {
+              printf("ERROR!!! Division by zero\n");
+              return 1;
+          }
+        int temp = stack[top];
+        temp = temp / num;
+        stack[top] = temp;
+      }
+      op = temp[i];
+      num = 0;
+    }
+  }
+
+  int result = 0;
+  for (int i = 0; i <= top; i++)
+  {
+    result += stack[i];
+  }
+
+  printf("The result is:%d", result);
+  return 0;
 }
 
-void showUsers() {
-    struct User u;
-    FILE *fp = fopen(FILE_NAME, "r");
-    if (!fp) {
-        printf("No users found\n");
-        return;
-    }
-    printf("\n--- Users ---\n");
-    while (fscanf(fp, "%d %s %d", &u.id, u.name, &u.age) == 3) {
-        printf("ID:%d Name:%s Age:%d\n", u.id, u.name, u.age);
-    }
-    fclose(fp);
-}
-
-void updateUser() {
-    struct User u;
-    int id, found = 0;
-    FILE *fp = fopen(FILE_NAME, "r");
-    FILE *temp = fopen("temp.txt", "w");
-    if (!fp || !temp) {
-        printf("Cannot open file\n");
-        return;
-    }
-
-    printf("Enter ID to update: ");
-    scanf("%d", &id);
-
-    while (fscanf(fp, "%d %s %d", &u.id, u.name, &u.age) == 3) {
-        if (u.id == id) {
-            printf("Enter new Name: ");
-            scanf("%s", u.name);
-            printf("Enter new Age: ");
-            scanf("%d", &u.age);
-            found = 1;
-        }
-        fprintf(temp, "%d %s %d\n", u.id, u.name, u.age);
-    }
-
-    fclose(fp);
-    fclose(temp);
-    remove(FILE_NAME);
-    rename("temp.txt", FILE_NAME);
-
-    if (found) printf("User updated!\n");
-    else printf("User not found\n");
-}
-
-void deleteUser() {
-    struct User u;
-    int id, found = 0;
-    FILE *fp = fopen(FILE_NAME, "r");
-    FILE *temp = fopen("temp.txt", "w");
-    if (!fp || !temp) {
-        printf("Cannot open file\n");
-        return;
-    }
-
-    printf("Enter ID to delete: ");
-    scanf("%d", &id);
-
-    while (fscanf(fp, "%d %s %d", &u.id, u.name, &u.age) == 3) {
-        if (u.id == id) {
-            found = 1;
-            continue;
-        }
-        fprintf(temp, "%d %s %d\n", u.id, u.name, u.age);
-    }
-
-    fclose(fp);
-    fclose(temp);
-    remove(FILE_NAME);
-    rename("temp.txt", FILE_NAME);
-
-    if (found) printf("User deleted!\n");
-    else printf("User not found\n");
-}
-
-int main() {
-    int ch;
-    while (1) {
-        printf("\n--- Menu ---\n");
-        printf("1.Add User\n2.Show Users\n3.Update User\n4.Delete User\n5.Exit\n");
-        printf("Enter choice: ");
-        scanf("%d", &ch);
-
-        if (ch == 1) addUser();
-        else if (ch == 2) showUsers();
-        else if (ch == 3) updateUser();
-        else if (ch == 4) deleteUser();
-        else if (ch == 5) exit(0);
-        else printf("Invalid choice\n");
-    }
-    return 0;
-}
