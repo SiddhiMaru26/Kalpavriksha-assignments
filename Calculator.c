@@ -3,121 +3,110 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-int main()
-{
-  char str[300000];
-  printf("Enter the string you want to evaluate:\n");
-  fgets(str, sizeof(str), stdin);
-  
+#define MAX_SIZE 300000  // Avoid magic number
 
-  // removing spaces from the string
-  char temp[300000];
-  int j = 0;
-  for (int i = 0; i < strlen(str); i++)
-  {
-    if (str[i] != ' ')
-    {
-      temp[j] = str[i];
-      j++;
+void evaluateExpression() {
+    char inputExpression[MAX_SIZE];
+    printf("Enter the string you want to evaluate:\n");
+    fgets(inputExpression, sizeof(inputExpression), stdin);
+
+    // Remove spaces from input
+    char expression[MAX_SIZE];
+    int j = 0;
+    for (int i = 0; i < strlen(inputExpression); i++) {
+        if (!isspace((unsigned char)inputExpression[i])) {
+            expression[j++] = inputExpression[i];
+        }
     }
-  }
-  temp[j] = '\0';
+    expression[j] = '\0';
 
-  // Validating the string
-  int len = strlen(temp);
-  temp[len - 1] = '\0';
-  for (int i = 0; temp[i] != '\0'; i++)
-  {
-    char ch = temp[i];
-    if (!isdigit(ch))
-    {
-      if (ch != '+' && ch != '-' && ch != '*' && ch != '/')
-      {
-        printf("Error: Invalid expression.");
-        return 1;
-      }
+    // Validate expression
+    int length = strlen(expression);
+    if (length == 0) {
+        printf("Error: Empty expression.\n");
+        return;
     }
-  }
 
-  int stack[300000];
-  int top = -1;
-  int sign = 1;
-  char op = '+';
-  int num = 0;
-
-  // evaluating the result
-  for (int i = 0; i < strlen(temp); i++)
-  {
-    if (isdigit(temp[i]))
-    {
-      num = num * 10 + (temp[i] - '0');
+    // Remove newline character if present
+    if (expression[length - 1] == '\n') {
+        expression[length - 1] = '\0';
+        length--;
     }
-    if (!isdigit(temp[i]) || temp[i + 1] == '\0')
-    {
-      if (op == '+')
-      {
 
-        if (top + 1 >= 300000)
-         {
-            printf("ERROR!!! Stack Overflow\n");
-            return 1;
-         }
-        top++;
-        stack[top] = num;
-      }
-      else if (op == '-')
-      {
-
-        if (top + 1 >= 300000)
-         {
-            printf("ERROR!!! Stack Overflow\n");
-            return 1;
-         }
-        top++;
-        stack[top] = num * -1;
-      }
-      else if (op == '*')
-      {
-
-        if (top < 0)
-          {
-               printf("ERROR!!! Stack Underflow\n");
-               return 1;
-          }
-        int temp = stack[top];
-        temp = temp * num;
-        stack[top] = temp;
-      }
-      else if (op == '/')
-      {
-
-         if (top < 0)
-          {
-               printf("ERROR!!! Stack Underflow\n");
-               return 1;
-          }
-
-        if (num == 0)
-          {
-              printf("Error:Division by zero.\n");
-              return 1;
-          }
-        int temp = stack[top];
-        temp = temp / num;
-        stack[top] = temp;
-      }
-      op = temp[i];
-      num = 0;
+    // Expression should not start with * or /
+    if (expression[0] == '*' || expression[0] == '/') {
+        printf("Error: Expression cannot start with '*' or '/'.\n");
+        return;
     }
-  }
 
-  int result = 0;
-  for (int i = 0; i <= top; i++)
-  {
-    result += stack[i];
-  }
+    for (int i = 0; expression[i] != '\0'; i++) {
+        char currentChar = expression[i];
+        if (!isdigit((unsigned char)currentChar) &&
+            currentChar != '+' && currentChar != '-' &&
+            currentChar != '*' && currentChar != '/') {
+            printf("Error: Invalid Expression\n", currentChar);
+            return;
+        }
+    }
 
-  printf("The result is:%d", result);
-  return 0;
+    int operandStack[MAX_SIZE];
+    int top = -1;
+    char operator = '+';
+    int operand = 0;
+
+    // Evaluate the expression
+    for (int i = 0; i < strlen(expression); i++) {
+        if (isdigit((unsigned char)expression[i])) {
+            operand = operand * 10 + (expression[i] - '0');
+        }
+
+        if (!isdigit((unsigned char)expression[i]) || expression[i + 1] == '\0') {
+            if (operator == '+') {
+                if (top + 1 >= MAX_SIZE) {
+                    printf("Error: Stack Overflow\n");
+                    return;
+                }
+                operandStack[++top] = operand;
+            } 
+            else if (operator == '-') {
+                if (top + 1 >= MAX_SIZE) {
+                    printf("Error: Stack Overflow\n");
+                    return;
+                }
+                operandStack[++top] = -operand;
+            } 
+            else if (operator == '*') {
+                if (top < 0) {
+                    printf("Error: Stack Underflow\n");
+                    return;
+                }
+                operandStack[top] = operandStack[top] * operand;
+            } 
+            else if (operator == '/') {
+                if (top < 0) {
+                    printf("Error: Stack Underflow\n");
+                    return;
+                }
+                if (operand == 0) {
+                    printf("Error: Division by zero.\n");
+                    return;
+                }
+                operandStack[top] = operandStack[top] / operand;
+            }
+            operator = expression[i];
+            operand = 0;
+        }
+    }
+
+    int result = 0;
+    for (int i = 0; i <= top; i++) {
+        result += operandStack[i];
+    }
+
+    printf("The result is: %d\n", result);
 }
 
+int main() {
+    evaluateExpression();
+    return 0;
+}
