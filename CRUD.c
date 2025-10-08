@@ -118,7 +118,11 @@ int main() {
         else if (ch == 2) showUsers();
         else if (ch == 3) updateUser();
         else if (ch == 4) deleteUser();
-        else if (ch == 5) exit(0);
+        else if (ch == 5) {
+          printf("Exiting program...\n");
+          break;
+       }
+
         else printf("Invalid choice\n");
     }
     return 0;
