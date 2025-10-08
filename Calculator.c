@@ -33,7 +33,7 @@ int main()
     {
       if (ch != '+' && ch != '-' && ch != '*' && ch != '/')
       {
-        printf("ERROR!!! INVALID INPUT");
+        printf("Error: Invalid expression.");
         return 1;
       }
     }
@@ -99,7 +99,7 @@ int main()
 
         if (num == 0)
           {
-              printf("ERROR!!! Division by zero\n");
+              printf("Error:Division by zero.\n");
               return 1;
           }
         int temp = stack[top];
