@@ -14,17 +14,18 @@ struct User {
 
 bool idExists(int id) {
     struct User existingUser;
-    FILE *fp = fopen(FILE_NAME, "r");
-    if (!fp) return false;
-    while (fscanf(fp, "%d %s %d", &existingUser.id, existingUser.name, &existingUser.age) == 3) 
+    FILE *usersFile = fopen(FILE_NAME, "r");
+    if (!usersFile) 
+        return false;
+    while (fscanf(usersFile, "%d %s %d", &existingUser.id, existingUser.name, &existingUser.age) == 3) 
     {
         if (existingUser.id == id) 
         {
-            fclose(fp);
+            fclose(usersFile);
             return true;
         }
     }
-    fclose(fp);
+    fclose(usersFile);
     return false;
 }
 
@@ -42,8 +43,8 @@ bool isValidName(char *name)
 void addUser() 
 {
     struct User newUser;
-    FILE *fp = fopen(FILE_NAME, "a");
-    if (!fp) 
+    FILE *usersFile = fopen(FILE_NAME, "a");
+    if (!usersFile) 
     {
         printf("Cannot open file\n");
         return;
@@ -54,21 +55,21 @@ void addUser()
     {
         printf("Invalid input. Enter a numeric ID.\n");
         while (getchar() != '\n');
-        fclose(fp);
+        fclose(usersFile);
         return;
     }
 
     if (newUser.id <= 0) 
     {
         printf("Invalid input. Enter a numeric ID.\n");
-        fclose(fp);
+        fclose(usersFile);
         return;
     }
 
     if (idExists(newUser.id)) 
     {
         printf("Error: A user with ID %d already exists. Please enter a unique ID.\n", newUser.id);
-        fclose(fp);
+        fclose(usersFile);
         return;
     }
 
@@ -77,7 +78,7 @@ void addUser()
     if (!isValidName(newUser.name)) 
     {
         printf("Invalid name. Name must contain only letters and spaces.\n");
-        fclose(fp);
+        fclose(usersFile);
         return;
     }
 
@@ -86,50 +87,50 @@ void addUser()
     {
         printf("Age must be between 0 and 100.\n");
         while (getchar() != '\n');
-        fclose(fp);
+        fclose(usersFile);
         return;
     }
 
-    fprintf(fp, "%d %s %d\n", newUser.id, newUser.name, newUser.age);
-    fclose(fp);
+    fprintf(usersFile, "%d %s %d\n", newUser.id, newUser.name, newUser.age);
+    fclose(usersFile);
     printf("User added!\n");
 }
 
 void showUsers() 
 {
     struct User existingUser;
-    FILE *fp = fopen(FILE_NAME, "r");
-    if (!fp) 
+    FILE *usersFile = fopen(FILE_NAME, "r");
+    if (!usersFile) 
     {
         printf("No users found\n");
         return;
     }
     printf("\n--- Users ---\n");
-    while (fscanf(fp, "%d %s %d", &existingUser.id, existingUser.name, &existingUser.age) == 3) 
+    while (fscanf(usersFile, "%d %s %d", &existingUser.id, existingUser.name, &existingUser.age) == 3) 
     {
         printf("ID:%d Name:%s Age:%d\n", existingUser.id, existingUser.name, existingUser.age);
     }
-    fclose(fp);
+    fclose(usersFile);
 }
 
 void updateUser() 
 {
     struct User currentUser;
     int id, found = 0;
-    FILE *fp = fopen(FILE_NAME, "r");
-    FILE *temp = fopen("temp.txt", "w");
-    if (!fp || !temp) 
+    FILE *usersFile = fopen(FILE_NAME, "r");
+    FILE *tempFile = fopen("temp.txt", "w");
+    if (!usersFile || !tempFile) 
     {
         printf("Cannot open file\n");
-        if(fp) fclose(fp);
-        if(temp) fclose(temp);
+        if (usersFile) fclose(usersFile);
+        if (tempFile) fclose(tempFile);
         return;
     }
 
     printf("Enter ID to update: ");
     scanf("%d", &id);
 
-    while (fscanf(fp, "%d %s %d", &currentUser.id, currentUser.name, &currentUser.age) == 3) 
+    while (fscanf(usersFile, "%d %s %d", &currentUser.id, currentUser.name, &currentUser.age) == 3) 
     {
         if (currentUser.id == id) 
         {
@@ -139,13 +140,24 @@ void updateUser()
             scanf("%d", &currentUser.age);
             found = 1;
         }
-        fprintf(temp, "%d %s %d\n", currentUser.id, currentUser.name, currentUser.age);
+        fprintf(tempFile, "%d %s %d\n", currentUser.id, currentUser.name, currentUser.age);
     }
 
-    fclose(fp);
-    fclose(temp);
-    remove(FILE_NAME);
-    rename("temp.txt", FILE_NAME);
+    fclose(usersFile);
+    fclose(tempFile);
+
+    /* replace original file with temp file, handle errors */
+    if (remove(FILE_NAME) != 0) {
+        /* cleanup temp if replacement cannot proceed */
+        remove("temp.txt");
+        printf("Error updating file\n");
+        return;
+    }
+    if (rename("temp.txt", FILE_NAME) != 0) {
+        /* if rename fails, attempt to restore (temp already removed above) */
+        printf("Error updating file\n");
+        return;
+    }
 
     if (found) printf("User updated!\n");
     else printf("User not found\n");
@@ -155,33 +167,42 @@ void deleteUser()
 {
     struct User currentUser;
     int id, found = 0;
-    FILE *fp = fopen(FILE_NAME, "r");
-    FILE *temp = fopen("temp.txt", "w");
-    if (!fp || !temp) 
+    FILE *usersFile = fopen(FILE_NAME, "r");
+    FILE *tempFile = fopen("temp.txt", "w");
+    if (!usersFile || !tempFile) 
     {
         printf("Cannot open file\n");
-        if(fp) fclose(fp);
-        if(temp) fclose(temp);
+        if (usersFile) fclose(usersFile);
+        if (tempFile) fclose(tempFile);
         return;
     }
 
     printf("Enter ID to delete: ");
     scanf("%d", &id);
 
-    while (fscanf(fp, "%d %s %d", &currentUser.id, currentUser.name, &currentUser.age) == 3) 
+    while (fscanf(usersFile, "%d %s %d", &currentUser.id, currentUser.name, &currentUser.age) == 3) 
     {
         if (currentUser.id == id) 
         {
             found = 1;
             continue;
         }
-        fprintf(temp, "%d %s %d\n", currentUser.id, currentUser.name, currentUser.age);
+        fprintf(tempFile, "%d %s %d\n", currentUser.id, currentUser.name, currentUser.age);
     }
 
-    fclose(fp);
-    fclose(temp);
-    remove(FILE_NAME);
-    rename("temp.txt", FILE_NAME);
+    fclose(usersFile);
+    fclose(tempFile);
+
+    /* replace original file with temp file, handle errors */
+    if (remove(FILE_NAME) != 0) {
+        remove("temp.txt");
+        printf("Error updating file\n");
+        return;
+    }
+    if (rename("temp.txt", FILE_NAME) != 0) {
+        printf("Error updating file\n");
+        return;
+    }
 
     if (found) printf("User deleted!\n");
     else printf("User not found\n");
