@@ -23,6 +23,7 @@ bool isNumber(char *inputExpression)
             return false;
         }
     }
+
     return true;
 }
 
@@ -35,6 +36,7 @@ bool isAlphaString(char *inputExpression)
             return false;
         }
     }
+
     return true;
 }
 
@@ -47,6 +49,7 @@ bool areMarksValid(int marks[], int count)
             return false;
         }
     }
+
     return true;
 }
 
@@ -59,6 +62,7 @@ bool doesRollExist(struct Student students[], int totalStudents, int rollNumber)
             return true;
         }
     }
+
     return false;
 }
 
@@ -184,8 +188,6 @@ int main()
 
     for (int index = 0; index < numberOfStudents; index++)
     {
-      
-      
         bool validInput = false;
 
         while (!validInput)
