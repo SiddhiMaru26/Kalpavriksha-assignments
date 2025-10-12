@@ -5,21 +5,20 @@
 #include <stdbool.h>
 
 #define MAX_STUDENTS 100
+#define MARKS_COUNT 3
 
 struct Student
 {
     int rollNumber;
     char name[50];
-    int marks1;
-    int marks2;
-    int marks3;
+    int marks[MARKS_COUNT];
 };
 
-bool isNumber(char *str)
+bool isNumber(char *inputExpression)
 {
-    for (int i = 0; i < strlen(str); i++)
+    for (int index = 0; index < strlen(inputExpression); index++)
     {
-        if (!isdigit((unsigned char)str[i]))
+        if (!isdigit((unsigned char)inputExpression[index]))
         {
             return false;
         }
@@ -27,11 +26,11 @@ bool isNumber(char *str)
     return true;
 }
 
-bool isAlphaString(char *str)
+bool isAlphaString(char *inputExpression)
 {
-    for (int i = 0; i < strlen(str); i++)
+    for (int index = 0; index < strlen(inputExpression); index++)
     {
-        if (!isalpha((unsigned char)str[i]) && str[i] != ' ')
+        if (!isalpha((unsigned char)inputExpression[index]) && inputExpression[index] != ' ')
         {
             return false;
         }
@@ -39,28 +38,23 @@ bool isAlphaString(char *str)
     return true;
 }
 
-bool marksValid(int m1, int m2, int m3)
+bool areMarksValid(int marks[], int count)
 {
-    if (m1 < 0 || m1 > 100)
+    for (int index = 0; index < count; index++)
     {
-        return false;
-    }
-    if (m2 < 0 || m2 > 100)
-    {
-        return false;
-    }
-    if (m3 < 0 || m3 > 100)
-    {
-        return false;
+        if (marks[index] < 0 || marks[index] > 100)
+        {
+            return false;
+        }
     }
     return true;
 }
 
-bool rollExists(struct Student students[], int count, int roll)
+bool doesRollExist(struct Student students[], int totalStudents, int rollNumber)
 {
-    for (int i = 0; i < count; i++)
+    for (int index = 0; index < totalStudents; index++)
     {
-        if (students[i].rollNumber == roll)
+        if (students[index].rollNumber == rollNumber)
         {
             return true;
         }
@@ -68,14 +62,21 @@ bool rollExists(struct Student students[], int count, int roll)
     return false;
 }
 
-int calculateTotal(int mark1, int mark2, int mark3)
+int calculateTotal(int marks[], int subjectcount)
 {
-    return mark1 + mark2 + mark3;
+    int totalmarks = 0;
+
+    for (int index = 0; index < subjectcount; index++)
+    {
+        totalmarks += marks[index];
+    }
+
+    return totalmarks;
 }
 
-float calculateAverage(struct Student student)
+float calculateAverage(int marks[], int subjectcount)
 {
-    return calculateTotal(student.marks1, student.marks2, student.marks3) / 3.0f;
+    return calculateTotal(marks, subjectcount) / (float)subjectcount;
 }
 
 char assignGrade(float average)
@@ -111,21 +112,25 @@ void printPerformanceStars(char grade)
         case 'A':
             starCount = 5;
             break;
+
         case 'B':
             starCount = 4;
             break;
+
         case 'C':
             starCount = 3;
             break;
+
         case 'D':
             starCount = 2;
             break;
+
         default:
             starCount = 0;
             break;
     }
 
-    for (int i = 0; i < starCount; i++)
+    for (int index = 0; index < starCount; index++)
     {
         printf("*");
     }
@@ -152,7 +157,7 @@ int main()
 {
     struct Student students[MAX_STUDENTS];
     int numberOfStudents;
-    char input[100];
+    char input[200];
 
     while (true)
     {
@@ -162,7 +167,7 @@ int main()
 
         if (!isNumber(input))
         {
-            printf("Invalid number of students. Must be between 1 and 100.\n");
+            printf("Invalid number of students. Must be numeric.\n");
             continue;
         }
 
@@ -177,81 +182,84 @@ int main()
         break;
     }
 
-    for (int i = 0; i < numberOfStudents; i++)
+    for (int index = 0; index < numberOfStudents; index++)
     {
-        printf("\n--- Enter details for Student %d ---\n", i + 1);
-        bool valid = false;
+      
+      
+        bool validInput = false;
 
-        while (!valid)
+        while (!validInput)
         {
             printf("Enter RollNumber Name Marks1 Marks2 Marks3: ");
             fgets(input, sizeof(input), stdin);
             input[strcspn(input, "\n")] = '\0';
 
-            char rollStr[10];
-            char name[50];
-            int m1, m2, m3;
+            char rollNumberInput[10];
+            char studentName[50];
+            int marks[MARKS_COUNT];
 
-            int itemsRead = sscanf(input, "%9s %49s %d %d %d", rollStr, name, &m1, &m2, &m3);
+            int valuesRead = sscanf(input, "%9s %49s %d %d %d",
+                                    rollNumberInput, studentName,
+                                    &marks[0], &marks[1], &marks[2]);
 
-            if (itemsRead != 5)
+            if (valuesRead != 5)
             {
-                printf("Invalid input! Please follow the format: RollNumber Name Marks1 Marks2 Marks3\n");
+                printf("Invalid input! Format: RollNumber Name Marks1 Marks2 Marks3\n");
                 continue;
             }
 
-            if (!isNumber(rollStr))
+            if (!isNumber(rollNumberInput))
             {
-                printf("Roll number must be a numeric value.\n");
+                printf("Roll number must be numeric.\n");
                 continue;
             }
 
-            int rollNum = atoi(rollStr);
+            int rollNumber = atoi(rollNumberInput);
 
-            if (rollNum <= 0)
+            if (rollNumber <= 0)
             {
-                printf("Invalid Roll Number! Must be greater than 0.\n");
+                printf("Roll number must be greater than 0.\n");
                 continue;
             }
 
-            if (rollExists(students, i, rollNum))
+            if (doesRollExist(students, index, rollNumber))
             {
-                printf("Duplicate roll number detected! Enter a unique roll number.\n");
+                printf("Duplicate roll number detected! Enter unique roll number.\n");
                 continue;
             }
 
-            if (!isAlphaString(name))
+            if (!isAlphaString(studentName))
             {
-                printf("Invalid name! Only letters are allowed.\n");
+                printf("Invalid name! Only letters allowed.\n");
                 continue;
             }
 
-            if (!marksValid(m1, m2, m3))
+            if (!areMarksValid(marks, MARKS_COUNT))
             {
                 printf("Marks must be between 0 and 100.\n");
                 continue;
             }
 
-            students[i].rollNumber = rollNum;
-            strcpy(students[i].name, name);
-            students[i].marks1 = m1;
-            students[i].marks2 = m2;
-            students[i].marks3 = m3;
+            students[index].rollNumber = rollNumber;
+            strcpy(students[index].name, studentName);
 
-            valid = true;
+            for (int markIndex = 0; markIndex < MARKS_COUNT; markIndex++)
+            {
+                students[index].marks[markIndex] = marks[markIndex];
+            }
+
+            validInput = true;
         }
     }
 
-    printf("\n--- Student Details ---\n");
-
-    for (int i = 0; i < numberOfStudents; i++)
+    for (int index = 0; index < numberOfStudents; index++)
     {
-        int totalMarks = calculateTotal(students[i].marks1, students[i].marks2, students[i].marks3);
-        float averageMarks = calculateAverage(students[i]);
+        int totalMarks = calculateTotal(students[index].marks, MARKS_COUNT);
+        float averageMarks = calculateAverage(students[index].marks, MARKS_COUNT);
         char grade = assignGrade(averageMarks);
 
-        printf("\nRoll: %d\n", students[i].rollNumber);
-        printf("Name: %s\n", students[i].name);
+        printf("\nRoll: %d\n", students[index].rollNumber);
+        printf("Name: %s\n", students[index].name);
         printf("Total: %d\n", totalMarks);
         printf("Average: %.2f\n", averageMarks);
         printf("Grade: %c\n", grade);
