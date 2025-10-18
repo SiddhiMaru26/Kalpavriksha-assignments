@@ -4,23 +4,23 @@
 #define MAX_LENGTH 50
 
 int main() {
-    int n;
+    int size;
     printf("Enter number of words: ");
-    scanf("%d", &n);
+    scanf("%d", &size);
 
     char words[MAX_WORDS][MAX_LENGTH];
-    char (*ptr)[MAX_LENGTH] = words; 
+    char (*pointer)[MAX_LENGTH] = words; 
 
     printf("Enter words:\n");
-    for (int i = 0; i < n; i++) {
-        scanf("%s", *(ptr + i)); 
+    for (int index = 0; index< size; index++) {
+        scanf("%s", *(pointer + index)); 
     }
 
-    char *longestWord = *(ptr + 0);
+    char *longestWord = *(pointer + 0);
     int maxLength = 0;
 
-    for (int i = 0; i < n; i++) {
-        char *wordPtr = *(ptr + i);
+    for (int index = 0; index < size; index++) {
+        char *wordPtr = *(pointer + index);
         int length = 0;
 
         while (*(wordPtr + length) != '\0') {
@@ -29,7 +29,7 @@ int main() {
 
         if (length > maxLength) {
             maxLength = length;
-            longestWord = *(ptr + i);
+            longestWord = *(pointer + index);
         }
     }
 
