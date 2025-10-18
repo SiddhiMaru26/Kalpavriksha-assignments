@@ -20,7 +20,8 @@ void removeVowel(char *str)
     *write = '\0';
 }
 
-int main() {
+int main() 
+{
     char string[MAX_SIZE];
 
     printf("Enter a string: ");
