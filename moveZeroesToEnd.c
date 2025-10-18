@@ -1,33 +1,39 @@
 #include <stdio.h>
 
-int main() {
-    int n;
-    printf("Enter number of elements: ");
-    scanf("%d", &n);
+#define MAX_WORDS 100
+#define MAX_LENGTH 50
 
-    int arr[n];
-    printf("Enter array elements: ");
-    for (int i = 0; i < n; i++) {
-        scanf("%d", arr + i); 
+int main() {
+    int size;
+    printf("Enter number of words: ");
+    scanf("%d", &size);
+
+    char words[MAX_WORDS][MAX_LENGTH];
+    char (*pointer)[MAX_LENGTH] = words; 
+
+    printf("Enter words:\n");
+    for (int index = 0; index< size; index++) {
+        scanf("%s", *(pointer + index)); 
     }
 
-    int pos = 0; 
-    for (int i = 0; i < n; i++) {
-        if (*(arr + i) != 0) {
-            *(arr + pos) = *(arr + i);
-            pos++;
+    char *longestWord = *(pointer + 0);
+    int maxLength = 0;
+
+    for (int index = 0; index < size; index++) {
+        char *wordPtr = *(pointer + index);
+        int length = 0;
+
+        while (*(wordPtr + length) != '\0') {
+            length++;
+        }
+
+        if (length > maxLength) {
+            maxLength = length;
+            longestWord = *(pointer + index);
         }
     }
 
-    for (int i = pos; i < n; i++) {
-        *(arr + i) = 0;
-    }
-
-    printf("Array after moving zeros: ");
-    for (int i = 0; i < n; i++) {
-        printf("%d ", *(arr + i));
-    }
-    printf("\n");
+    printf("The longest word is: %s\n", longestWord);
 
     return 0;
 }
