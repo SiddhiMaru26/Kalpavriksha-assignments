@@ -57,7 +57,6 @@ void swapValues(int *firstValue, int *secondValue)
 
 void rotateMatrixClockwise(int *matrixPointer, int dimension)
 {
-    // Transpose
     for (int row = 0; row < dimension - 1; row++)
     {
         for (int col = row + 1; col < dimension; col++)
