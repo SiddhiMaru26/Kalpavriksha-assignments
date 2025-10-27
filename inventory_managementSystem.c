@@ -87,26 +87,25 @@ void validName(char *message, char *string, int maxLength)
             continue;
         }
 
-        int hasLetter = 0;
+        int isValid = 1;
         for (int i = 0; string[i] != '\0'; i++)
         {
-            if (isalpha((unsigned char)string[i]))
+            if (!isalpha((unsigned char)string[i]))
             {
-                hasLetter = 1;
+                isValid = 0;
                 break;
             }
         }
 
-        if (!hasLetter)
+        if (!isValid)
         {
-            printf("Invalid input! Name must contain at least one letter.\n");
+            printf("Invalid input! Name must contain letters only.\n");
             continue;
         }
 
         break;
     }
 }
-
 
 int validQuantity(char *message)
 {
@@ -121,10 +120,10 @@ void toLowerCase(char *string)
     }
 }
 
-void printProduct(Product p)
+void printProduct(Product product)
 {
     printf("Product ID: %d | Name: %s | Price: %.2f | Quantity: %d\n",
-           p.productID, p.productName, p.price, p.quantity);
+           product.productID, product.productName, product.price, product.quantity);
 }
 
 void viewProducts(Product *products, int count)
