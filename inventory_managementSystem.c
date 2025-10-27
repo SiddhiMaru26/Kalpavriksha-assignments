@@ -69,23 +69,28 @@ float validPrice(char *message)
 
 void validName(char *message, char *string, int maxLength)
 {
-    int hasLetter;
-
     while (1)
     {
         printf("%s", message);
-        scanf(" %[^\n]", string);
 
-        if (strlen(string) == 0 || strlen(string) >= maxLength)
+        if (fgets(string, maxLength, stdin) == NULL)
         {
-            printf("Invalid input! Name should contain only letters.\n");
+            printf("Error reading input! Try again.\n");
             continue;
         }
 
-        hasLetter = 0;
+        string[strcspn(string, "\n")] = '\0';
+
+        if (strlen(string) == 0)
+        {
+            printf("Invalid input! Name cannot be empty.\n");
+            continue;
+        }
+
+        int hasLetter = 0;
         for (int i = 0; string[i] != '\0'; i++)
         {
-            if (isalpha(string[i]))
+            if (isalpha((unsigned char)string[i]))
             {
                 hasLetter = 1;
                 break;
@@ -95,13 +100,13 @@ void validName(char *message, char *string, int maxLength)
         if (!hasLetter)
         {
             printf("Invalid input! Name must contain at least one letter.\n");
+            continue;
         }
-        else
-        {
-            break;
-        }
+
+        break;
     }
 }
+
 
 int validQuantity(char *message)
 {
