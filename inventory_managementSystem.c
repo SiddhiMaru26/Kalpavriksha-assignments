@@ -6,6 +6,8 @@
 #define NAME_LENGTH 50
 #define MIN_ID 1
 #define MAX_ID 10000
+#define MIN_PRICE 0.01
+#define MAX_PRICE 100000.0
 
 typedef struct
 {
@@ -53,6 +55,10 @@ float validPrice(char *message)
         {
             printf("Invalid input! Enter a number.\n");
             while (getchar() != '\n');
+        }
+        else if (value < MIN_PRICE || value > MAX_PRICE)
+        {
+            printf("Invalid price! Price should be between %.2f and %.2f.\n", MIN_PRICE, MAX_PRICE);
         }
         else
         {
