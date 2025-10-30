@@ -22,6 +22,7 @@ int getValidID(char *message)
 {
     int value;
     char extracharacter;
+
     while (1)
     {
         printf("%s", message);
@@ -45,6 +46,7 @@ float getValidPrice(char *message)
 {
     float value;
     char extracharacter;
+
     while (1)
     {
         printf("%s", message);
@@ -69,6 +71,7 @@ void getValidName(char *message, char *string, int maxLength)
     while (1)
     {
         printf("%s", message);
+        while (getchar() != '\n'); // clear input buffer
 
         if (fgets(string, maxLength, stdin) == NULL)
         {
@@ -107,7 +110,9 @@ void getValidName(char *message, char *string, int maxLength)
 void toLowerCase(char *string)
 {
     for (int i = 0; string[i]; i++)
+    {
         string[i] = tolower(string[i]);
+    }
 }
 
 void printProduct(Product product)
@@ -123,9 +128,12 @@ void viewProducts(Product *products, int count)
         printf("No products available.\n");
         return;
     }
+
     printf("========= PRODUCT LIST =========\n");
     for (int i = 0; i < count; i++)
+    {
         printProduct(products[i]);
+    }
 }
 
 void addProduct(Product **products, int *count)
@@ -144,6 +152,7 @@ void addProduct(Product **products, int *count)
     {
         newID = getValidID("Product ID: ");
         bool idExists = false;
+
         for (int i = 0; i < *count; i++)
         {
             if ((*products)[i].productID == newID)
@@ -152,16 +161,22 @@ void addProduct(Product **products, int *count)
                 break;
             }
         }
+
         if (idExists)
+        {
             printf("Error! Product ID already exists. Enter a unique ID.\n");
+        }
         else
+        {
             break;
+        }
     }
 
     while (1)
     {
         getValidName("Product Name: ", newName, NAME_LENGTH);
         bool nameExists = false;
+
         for (int i = 0; i < *count; i++)
         {
             if (strcasecmp((*products)[i].productName, newName) == 0)
@@ -170,10 +185,15 @@ void addProduct(Product **products, int *count)
                 break;
             }
         }
+
         if (nameExists)
+        {
             printf("Error! Product Name already exists. Enter a unique name.\n");
+        }
         else
+        {
             break;
+        }
     }
 
     (*products)[*count].productID = newID;
@@ -188,6 +208,7 @@ void addProduct(Product **products, int *count)
 void updateQuantity(Product *products, int count)
 {
     int id = getValidID("Enter Product ID to update quantity: ");
+
     for (int i = 0; i < count; i++)
     {
         if (products[i].productID == id)
@@ -197,12 +218,14 @@ void updateQuantity(Product *products, int count)
             return;
         }
     }
+
     printf("Product with ID %d not found.\n", id);
 }
 
 void searchByID(Product *products, int count)
 {
     int id = getValidID("Enter Product ID to search: ");
+
     for (int i = 0; i < count; i++)
     {
         if (products[i].productID == id)
@@ -212,6 +235,7 @@ void searchByID(Product *products, int count)
             return;
         }
     }
+
     printf("Product not found.\n");
 }
 
@@ -226,6 +250,7 @@ void searchByName(Product *products, int count)
 
     bool found = false;
     printf("Products Found:\n");
+
     for (int i = 0; i < count; i++)
     {
         char lowerProduct[NAME_LENGTH];
@@ -238,17 +263,35 @@ void searchByName(Product *products, int count)
             found = true;
         }
     }
+
     if (!found)
+    {
         printf("No matching products found.\n");
+    }
 }
 
 void searchByPriceRange(Product *products, int count)
 {
-    float minPrice = getValidPrice("Enter minimum price: ");
-    float maxPrice = getValidPrice("Enter maximum price: ");
+    float minPrice, maxPrice;
+
+    while (1)
+    {
+        minPrice = getValidPrice("Enter minimum price: ");
+        maxPrice = getValidPrice("Enter maximum price: ");
+
+        if (maxPrice < minPrice)
+        {
+            printf("Invalid range! Maximum price must be greater than or equal to minimum price.\n");
+        }
+        else
+        {
+            break;
+        }
+    }
 
     bool found = false;
     printf("Products in price range:\n");
+
     for (int i = 0; i < count; i++)
     {
         if (products[i].price >= minPrice && products[i].price <= maxPrice)
@@ -257,8 +300,11 @@ void searchByPriceRange(Product *products, int count)
             found = true;
         }
     }
+
     if (!found)
+    {
         printf("No products found in this price range.\n");
+    }
 }
 
 void deleteProduct(Product **products, int *count)
@@ -271,10 +317,13 @@ void deleteProduct(Product **products, int *count)
         if ((*products)[i].productID == id)
         {
             for (int j = i; j < *count - 1; j++)
+            {
                 (*products)[j] = (*products)[j + 1];
+            }
 
             *products = (Product *)realloc(*products, (*count - 1) * sizeof(Product));
             (*count)--;
+
             printf("Product deleted successfully!\n");
             found = true;
             break;
@@ -282,13 +331,16 @@ void deleteProduct(Product **products, int *count)
     }
 
     if (!found)
+    {
         printf("Product with ID %d not found.\n", id);
+    }
 }
 
 int main()
 {
     int initialCount = getValidID("Enter initial number of products: ");
     Product *inventory = (Product *)calloc(initialCount, sizeof(Product));
+
     if (inventory == NULL)
     {
         printf("Memory allocation failed!\n");
@@ -306,6 +358,7 @@ int main()
         {
             newID = getValidID("Product ID: ");
             bool idExists = false;
+
             for (int j = 0; j < i; j++)
             {
                 if (inventory[j].productID == newID)
@@ -314,16 +367,22 @@ int main()
                     break;
                 }
             }
+
             if (idExists)
+            {
                 printf("Error! Product ID already exists. Enter a unique ID.\n");
+            }
             else
+            {
                 break;
+            }
         }
 
         while (1)
         {
             getValidName("Product Name: ", newName, NAME_LENGTH);
             bool nameExists = false;
+
             for (int j = 0; j < i; j++)
             {
                 if (strcasecmp(inventory[j].productName, newName) == 0)
@@ -332,10 +391,15 @@ int main()
                     break;
                 }
             }
+
             if (nameExists)
+            {
                 printf("Error! Product Name already exists. Enter a unique name.\n");
+            }
             else
+            {
                 break;
+            }
         }
 
         inventory[i].productID = newID;
