@@ -28,12 +28,16 @@ typedef struct FileNode
     int sizeBytes;
 } FileNode;
 
+/* ------------------------------- Global state ------------------------------- */
+
 unsigned char virtualDisk[numberOfBlocks][blockSize];
 FreeBlock* freeListHead = NULL;
 FreeBlock* freeListTail = NULL;
 int freeBlockCount = 0;
 FileNode* rootDirectory = NULL;
 FileNode* currentWorkingDirectory = NULL;
+
+/* ------------------------------- Free block list --------------------------- */
 
 FreeBlock* CreateFreeBlockNode(int index)
 {
@@ -58,8 +62,8 @@ void InitializeFreeBlocks(void)
         FreeBlock* node = CreateFreeBlockNode(blockIndex);
         if (!node)
         {
-           return;
-        } 
+            return;
+        }
         if (!freeListHead)
         {
             freeListHead = freeListTail = node;
@@ -76,18 +80,27 @@ void InitializeFreeBlocks(void)
 
 int AllocateBlocks(int requiredBlocks, int* allocatedBlockIndices)
 {
-    if (requiredBlocks <= 0 || freeBlockCount < requiredBlocks) return 0;
+    if (requiredBlocks <= 0 || freeBlockCount < requiredBlocks)
+    {
+        return 0;
+    }
     for (int index = 0; index < requiredBlocks; index++)
     {
         FreeBlock* head = freeListHead;
         if (!head)
-        { 
+        {
             return index;
         }
         allocatedBlockIndices[index] = head->index;
         freeListHead = head->next;
-        if (freeListHead) freeListHead->previous = NULL;
-        else freeListTail = NULL;
+        if (freeListHead)
+        {
+            freeListHead->previous = NULL;
+        }
+        else
+        {
+            freeListTail = NULL;
+        }
         free(head);
         freeBlockCount--;
     }
@@ -96,13 +109,16 @@ int AllocateBlocks(int requiredBlocks, int* allocatedBlockIndices)
 
 void ReturnBlocks(int* allocatedBlockIndices, int count)
 {
-    if (!allocatedBlockIndices || count <= 0) return;
-    for (int index = 0; index< count; index++)
+    if (!allocatedBlockIndices || count <= 0)
+    {
+        return;
+    }
+    for (int index = 0; index < count; index++)
     {
         FreeBlock* node = CreateFreeBlockNode(allocatedBlockIndices[index]);
         if (!node)
         {
-             return;
+            return;
         }
         if (!freeListTail)
         {
@@ -117,6 +133,8 @@ void ReturnBlocks(int* allocatedBlockIndices, int count)
         freeBlockCount++;
     }
 }
+
+/* ------------------------------- File tree --------------------------------- */
 
 FileNode* CreateFileNode(const char* name, int isDir)
 {
@@ -138,7 +156,10 @@ FileNode* CreateFileNode(const char* name, int isDir)
 
 int InsertChild(FileNode* directory, FileNode* child)
 {
-    if (!directory || !directory->isDirectory || !child) return 0;
+    if (!directory || !directory->isDirectory || !child)
+    {
+        return 0;
+    }
     child->parent = directory;
     if (!directory->firstChild)
     {
@@ -159,14 +180,18 @@ int InsertChild(FileNode* directory, FileNode* child)
 
 FileNode* FindChild(FileNode* directory, const char* name)
 {
-    if (!directory || !directory->isDirectory || !directory->firstChild || !name) 
+    if (!directory || !directory->isDirectory || !name)
     {
         return NULL;
     }
-    FileNode*temporary = directory->firstChild;
+    if (!directory->firstChild)
+    {
+        return NULL;
+    }
+    FileNode* temporary = directory->firstChild;
     do
     {
-        if (strcmp(temporary->name, name) == 0) 
+        if (strcmp(temporary->name, name) == 0)
         {
             return temporary;
         }
@@ -177,7 +202,7 @@ FileNode* FindChild(FileNode* directory, const char* name)
 
 int RemoveChild(FileNode* child)
 {
-    if (!child || !child->parent) 
+    if (!child || !child->parent)
     {
         return 0;
     }
@@ -190,7 +215,10 @@ int RemoveChild(FileNode* child)
     {
         child->prevSibling->nextSibling = child->nextSibling;
         child->nextSibling->prevSibling = child->prevSibling;
-        if (parent->firstChild == child) parent->firstChild = child->nextSibling;
+        if (parent->firstChild == child)
+        {
+            parent->firstChild = child->nextSibling;
+        }
     }
     child->nextSibling = child->prevSibling = NULL;
     child->parent = NULL;
@@ -199,7 +227,10 @@ int RemoveChild(FileNode* child)
 
 void ReleaseFileNode(FileNode* node)
 {
-    if (!node) return;
+    if (!node)
+    {
+        return;
+    }
     if (node->isDirectory)
     {
         while (node->firstChild)
@@ -219,12 +250,14 @@ void ReleaseFileNode(FileNode* node)
     free(node);
 }
 
+/* ------------------------------- Initialization ---------------------------- */
+
 void InitializeRoot(void)
 {
     rootDirectory = CreateFileNode("/", 1);
     if (rootDirectory)
     {
-         rootDirectory->parent = rootDirectory;
+        rootDirectory->parent = rootDirectory;
     }
     currentWorkingDirectory = rootDirectory;
 }
@@ -233,11 +266,25 @@ void InitializeDisk(void)
 {
     for (int blockIndex = 0; blockIndex < numberOfBlocks; ++blockIndex)
     {
-        for (int index = 0; index < blockSize; index++) 
+        for (int index = 0; index < blockSize; index++)
         {
             virtualDisk[blockIndex][index] = 0;
         }
     }
+}
+
+/* ------------------------------- Commands ---------------------------------- */
+
+static int NameContainsSpace(const char* s)
+{
+    for (size_t i = 0; s && s[i]; ++i)
+    {
+        if (isspace((unsigned char)s[i]))
+        {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void CommandMkdir(const char* directoryName)
@@ -247,19 +294,14 @@ void CommandMkdir(const char* directoryName)
         printf("Usage: mkdir <directoryName>\n");
         return;
     }
-    
-    for (int index = 0; directoryName[index]; index++)
+    if (NameContainsSpace(directoryName))
     {
-        if (isspace((unsigned char)directoryName[index]))
-        {
-            printf("mkdir: A positional parameter cannot be found that accepts argument '%s'.\n", directoryName);
-            return;
-        }
+        printf("Invalid directory name. Names cannot contain spaces.\n");
+        return;
     }
-
     if (FindChild(currentWorkingDirectory, directoryName))
     {
-        printf("mkdir: '%s' already exists\n", directoryName);
+        printf("Name already exists in current directory.\n");
         return;
     }
     FileNode* directory = CreateFileNode(directoryName, 1);
@@ -274,19 +316,14 @@ void CommandCreate(const char* fileName)
         printf("Usage: create <fileName>\n");
         return;
     }
-
-    for (int index = 0; fileName[index]; index++)
+    if (NameContainsSpace(fileName))
     {
-        if (isspace((unsigned char)fileName[index]))
-        {
-            printf("create: A positional parameter cannot be found that accepts argument '%s'.\n", fileName);
-            return;
-        }
+        printf("Invalid file name. Names cannot contain spaces.\n");
+        return;
     }
-
     if (FindChild(currentWorkingDirectory, fileName))
     {
-        printf("create: '%s' already exists\n", fileName);
+        printf("Name already exists in current directory.\n");
         return;
     }
     FileNode* file = CreateFileNode(fileName, 0);
@@ -294,7 +331,24 @@ void CommandCreate(const char* fileName)
     printf("File '%s' created successfully.\n", fileName);
 }
 
-void CommandWrite(const char* fileName, const char* content)
+/* Helper: strip a single pair of surrounding quotes if present */
+static char* StripSurroundingQuotes(const char* input)
+{
+    if (!input) return NULL;
+    size_t inputLength = strlen(input);
+    if (inputLength >= 2 && ((input[0] == '"' && input[inputLength - 1] == '"') || (input[0] == '\'' && input[inputLength - 1] == '\'')))
+    {
+        size_t innerLength = inputLength - 2;
+        char* out = (char*)malloc(innerLength + 1);
+        if (!out) return NULL;
+        memcpy(out, input + 1, innerLength);
+        out[innerLength] = '\0';
+        return out;
+    }
+    return strdup(input);
+}
+
+void CommandWrite(const char* fileName, const char* contentArgument)
 {
     if (!fileName || strlen(fileName) == 0)
     {
@@ -304,7 +358,7 @@ void CommandWrite(const char* fileName, const char* content)
     FileNode* file = FindChild(currentWorkingDirectory, fileName);
     if (!file)
     {
-        printf("write: '%s' not found\n", fileName);
+        printf("File not found.\n");
         return;
     }
     if (file->isDirectory)
@@ -313,8 +367,15 @@ void CommandWrite(const char* fileName, const char* content)
         return;
     }
 
-    const char* ptr = content ? content : "";
-    int contentLength = (int)strlen(ptr);
+    char* content = StripSurroundingQuotes(contentArgument ? contentArgument : "");
+    if (!content)
+    {
+        printf("Memory allocation failed\n");
+        return;
+    }
+
+    int contentLength = (int)strlen(content);
+
     if (file->blockCount && file->blockIndices)
     {
         ReturnBlocks(file->blockIndices, file->blockCount);
@@ -328,6 +389,7 @@ void CommandWrite(const char* fileName, const char* content)
     if (requiredBlocks == 0)
     {
         printf("Data written successfully (size=0 bytes).\n");
+        free(content);
         return;
     }
 
@@ -335,6 +397,7 @@ void CommandWrite(const char* fileName, const char* content)
     if (!allocatedBlockIndices)
     {
         printf("Memory allocation failed\n");
+        free(content);
         return;
     }
 
@@ -344,37 +407,39 @@ void CommandWrite(const char* fileName, const char* content)
     {
         if (allocated > 0)
         {
-             ReturnBlocks(allocatedBlockIndices, allocated);
+            ReturnBlocks(allocatedBlockIndices, allocated);
         }
         free(allocatedBlockIndices);
         printf("write: disk full or insufficient blocks. Write failed.\n");
+        free(content);
         return;
     }
 
-    int remaining = contentLength;
-    const unsigned char* src = (const unsigned char*)ptr;
-    for (int index = 0; index< requiredBlocks; index++)
+    int bytesRemaining = contentLength;
+    const unsigned char* contentPointer = (const unsigned char*)content;
+    for (int index = 0; index < requiredBlocks; index++)
     {
-        int writeBytes = remaining >= blockSize ? blockSize : remaining;
-        if (writeBytes > 0) 
+        int writeBytes = bytesRemaining >= blockSize ? blockSize : bytesRemaining;
+        if (writeBytes > 0)
         {
-            memcpy(virtualDisk[allocatedBlockIndices[index]], src, writeBytes);
+            memcpy(virtualDisk[allocatedBlockIndices[index]], contentPointer, writeBytes);
         }
         if (writeBytes < blockSize)
         {
-            for (int indices = writeBytes; indices< blockSize; indices++)
+            for (int byteIndex = writeBytes; byteIndex < blockSize; byteIndex++)
             {
-               virtualDisk[allocatedBlockIndices[index]][indices] = 0;
+                virtualDisk[allocatedBlockIndices[index]][byteIndex] = 0;
             }
         }
-        src += writeBytes;
-        remaining -= writeBytes;
+        contentPointer += writeBytes;
+        bytesRemaining -= writeBytes;
     }
 
     file->blockIndices = allocatedBlockIndices;
     file->blockCount = requiredBlocks;
     file->sizeBytes = contentLength;
     printf("Data written successfully (size=%d bytes).\n", contentLength);
+    free(content);
 }
 
 void CommandRead(const char* fileName)
@@ -387,7 +452,7 @@ void CommandRead(const char* fileName)
     FileNode* file = FindChild(currentWorkingDirectory, fileName);
     if (!file)
     {
-        printf("read: '%s' not found\n", fileName);
+        printf("File not found.\n");
         return;
     }
     if (file->isDirectory)
@@ -395,9 +460,10 @@ void CommandRead(const char* fileName)
         printf("read: '%s' is a directory\n", fileName);
         return;
     }
-    if (!file->blockCount || !file->blockIndices) 
-    { 
-        printf("\n"); return; 
+    if (!file->blockCount || !file->blockIndices || file->sizeBytes == 0)
+    {
+        printf("(empty)\n");
+        return;
     }
 
     int bytesLeft = file->sizeBytes;
@@ -420,7 +486,7 @@ void CommandDelete(const char* fileName)
     FileNode* file = FindChild(currentWorkingDirectory, fileName);
     if (!file)
     {
-        printf("delete: '%s' not found\n", fileName);
+        printf("File not found.\n");
         return;
     }
     if (file->isDirectory)
@@ -429,7 +495,11 @@ void CommandDelete(const char* fileName)
         return;
     }
     RemoveChild(file);
-    if (file->blockCount && file->blockIndices) { ReturnBlocks(file->blockIndices, file->blockCount); free(file->blockIndices); }
+    if (file->blockCount && file->blockIndices)
+    {
+        ReturnBlocks(file->blockIndices, file->blockCount);
+        free(file->blockIndices);
+    }
     free(file);
     printf("File deleted successfully.\n");
 }
@@ -444,7 +514,7 @@ void CommandRmdir(const char* directoryName)
     FileNode* directory = FindChild(currentWorkingDirectory, directoryName);
     if (!directory)
     {
-        printf("rmdir: '%s' not found\n", directoryName);
+        printf("Directory not found.\n");
         return;
     }
     if (!directory->isDirectory)
@@ -454,7 +524,7 @@ void CommandRmdir(const char* directoryName)
     }
     if (directory->firstChild)
     {
-        printf("rmdir: '%s' is not empty\n", directoryName);
+        printf("Directory not empty. Remove files first.\n");
         return;
     }
     RemoveChild(directory);
@@ -464,18 +534,19 @@ void CommandRmdir(const char* directoryName)
 
 void CommandLs(void)
 {
-    if (!currentWorkingDirectory->firstChild) 
+    if (!currentWorkingDirectory->firstChild)
     {
-         printf("(empty)\n"); return; 
+        printf("(empty)\n");
+        return;
     }
     FileNode* it = currentWorkingDirectory->firstChild;
     do
     {
         if (it->isDirectory)
         {
-             printf("%s/\n", it->name);
+            printf("%s/\n", it->name);
         }
-        else 
+        else
         {
             printf("%s\n", it->name);
         }
@@ -485,9 +556,10 @@ void CommandLs(void)
 
 void PrintWorkingDirectory(void)
 {
-    if (currentWorkingDirectory == rootDirectory) 
-    { 
-        printf("/\n"); return; 
+    if (currentWorkingDirectory == rootDirectory)
+    {
+        printf("/\n");
+        return;
     }
     const int maxDepth = 1024;
     const char* parts[maxDepth];
@@ -502,7 +574,10 @@ void PrintWorkingDirectory(void)
     for (int index = depth - 1; index >= 0; index--)
     {
         printf("%s", parts[index]);
-        if (index > 0) printf("/");
+        if (index > 0)
+        {
+            printf("/");
+        }
     }
     printf("\n");
 }
@@ -522,20 +597,20 @@ void CommandCd(const char* argument)
     }
     if (strcmp(argument, "..") == 0)
     {
-        if (currentWorkingDirectory == rootDirectory) 
-        { 
+        if (currentWorkingDirectory == rootDirectory)
+        {
             printf("Already at root\n");
-             return;
+            return;
         }
         currentWorkingDirectory = currentWorkingDirectory->parent;
-        printf("Moved to "); 
-        PrintWorkingDirectory(); 
+        printf("Moved to ");
+        PrintWorkingDirectory();
         return;
     }
     FileNode* directory = FindChild(currentWorkingDirectory, argument);
     if (!directory)
     {
-        printf("cd: '%s' not found\n", argument);
+        printf("Directory not found.\n");
         return;
     }
     if (!directory->isDirectory)
@@ -544,7 +619,8 @@ void CommandCd(const char* argument)
         return;
     }
     currentWorkingDirectory = directory;
-    printf("Moved to "); PrintWorkingDirectory();
+    printf("Moved to ");
+    PrintWorkingDirectory();
 }
 
 void CommandDf(void)
@@ -554,6 +630,8 @@ void CommandDf(void)
     printf("Total Blocks: %d\nUsed Blocks: %d\nFree Blocks: %d\nDisk Usage: %.2f%%\n",
            numberOfBlocks, used, freeBlockCount, percent);
 }
+
+/* ------------------------------- Shutdown --------------------------------- */
 
 void ShutdownAll(void)
 {
@@ -579,17 +657,7 @@ void ShutdownAll(void)
     freeBlockCount = 0;
 }
 
-void PrintPrompt(void)
-{
-    if (currentWorkingDirectory == rootDirectory) 
-    {
-        printf("/ > ");
-    }
-    else 
-    {
-        printf("%s > ", currentWorkingDirectory->name);
-    }
-}
+/* ------------------------------- Main loop -------------------------------- */
 
 int main(void)
 {
@@ -601,7 +669,16 @@ int main(void)
     char buffer[lineBuffer];
     while (1)
     {
-        PrintPrompt();
+
+        if (currentWorkingDirectory == rootDirectory)
+        {
+            printf("/ > ");
+        }
+        else
+        {
+            printf("%s > ", currentWorkingDirectory->name);
+        }
+
         if (!fgets(buffer, sizeof(buffer), stdin))
         {
             printf("\n");
@@ -611,81 +688,91 @@ int main(void)
         }
 
         char* newline = strchr(buffer, '\n');
-        if (newline) *newline = '\0';
+        if (newline)
+        {
+            *newline = '\0';
+        }
 
         char* line = buffer;
-        while (*line && isspace((unsigned char)*line)) line++;
-        if (*line == '\0') continue;
+        while (*line && isspace((unsigned char)*line))
+        {
+            line++;
+        }
+        if (*line == '\0')
+        {
+            continue;
+        }
 
         char command[64] = {0};
         char argument[lineBuffer] = {0};
 
-        int pos = 0;
-        while (*line && !isspace((unsigned char)*line) && pos < 63)
+        int commandIndex = 0;
+        while (*line && !isspace((unsigned char)*line) && commandIndex < 63)
         {
-            command[pos++] = *line++;
+            command[commandIndex++] = *line++;
         }
-        command[pos] = '\0';
+        command[commandIndex] = '\0';
 
         while (*line && isspace((unsigned char)*line))
         {
-             line++;
+            line++;
         }
         if (*line)
         {
-            size_t argLen = strlen(line);
-            if (argLen >= sizeof(argument)) 
+            size_t argumentLength = strlen(line);
+            if (argumentLength >= sizeof(argument))
             {
-                argLen = sizeof(argument) - 1;
+                argumentLength = sizeof(argument) - 1;
             }
-            strncpy(argument, line, argLen);
-            argument[argLen] = '\0';
+            strncpy(argument, line, argumentLength);
+            argument[argumentLength] = '\0';
         }
 
         if (strcmp(command, "mkdir") == 0)
-        { 
+        {
             CommandMkdir(argument);
         }
-        else if (strcmp(command, "create") == 0) 
+        else if (strcmp(command, "create") == 0)
         {
             CommandCreate(argument);
         }
         else if (strcmp(command, "write") == 0)
         {
-            char* spacePos = strchr(argument, ' ');
-            if (!spacePos) 
-            { 
-                printf("Usage: write <fileName> <content>\n"); 
-                continue; 
+            char* firstSpacePosition = strchr(argument, ' ');
+            if (!firstSpacePosition)
+            {
+                printf("Usage: write <fileName> <content>\n");
+                continue;
             }
-            *spacePos = '\0';
-            CommandWrite(argument, spacePos + 1);
+            *firstSpacePosition = '\0';
+
+            CommandWrite(argument, firstSpacePosition + 1);
         }
         else if (strcmp(command, "read") == 0)
-        { 
+        {
             CommandRead(argument);
         }
-        else if (strcmp(command, "delete") == 0) 
+        else if (strcmp(command, "delete") == 0)
         {
             CommandDelete(argument);
         }
-        else if (strcmp(command, "rmdir") == 0)\
+        else if (strcmp(command, "rmdir") == 0)
         {
             CommandRmdir(argument);
         }
-        else if (strcmp(command, "ls") == 0) 
+        else if (strcmp(command, "ls") == 0)
         {
             CommandLs();
         }
-        else if (strcmp(command, "cd") == 0) 
+        else if (strcmp(command, "cd") == 0)
         {
             CommandCd(argument);
         }
-        else if (strcmp(command, "pwd") == 0) 
+        else if (strcmp(command, "pwd") == 0)
         {
             PrintWorkingDirectory();
         }
-        else if (strcmp(command, "df") == 0) 
+        else if (strcmp(command, "df") == 0)
         {
             CommandDf();
         }
