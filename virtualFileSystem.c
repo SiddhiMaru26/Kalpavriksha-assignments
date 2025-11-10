@@ -28,16 +28,12 @@ typedef struct FileNode
     int sizeBytes;
 } FileNode;
 
-/* ------------------------------- Global state ------------------------------- */
-
 unsigned char virtualDisk[numberOfBlocks][blockSize];
 FreeBlock* freeListHead = NULL;
 FreeBlock* freeListTail = NULL;
 int freeBlockCount = 0;
 FileNode* rootDirectory = NULL;
 FileNode* currentWorkingDirectory = NULL;
-
-/* ------------------------------- Free block list --------------------------- */
 
 FreeBlock* CreateFreeBlockNode(int index)
 {
@@ -133,8 +129,6 @@ void ReturnBlocks(int* allocatedBlockIndices, int count)
         freeBlockCount++;
     }
 }
-
-/* ------------------------------- File tree --------------------------------- */
 
 FileNode* CreateFileNode(const char* name, int isDir)
 {
@@ -250,8 +244,6 @@ void ReleaseFileNode(FileNode* node)
     free(node);
 }
 
-/* ------------------------------- Initialization ---------------------------- */
-
 void InitializeRoot(void)
 {
     rootDirectory = CreateFileNode("/", 1);
@@ -272,8 +264,6 @@ void InitializeDisk(void)
         }
     }
 }
-
-/* ------------------------------- Commands ---------------------------------- */
 
 static int NameContainsSpace(const char* s)
 {
@@ -331,7 +321,6 @@ void CommandCreate(const char* fileName)
     printf("File '%s' created successfully.\n", fileName);
 }
 
-/* Helper: strip a single pair of surrounding quotes if present */
 static char* StripSurroundingQuotes(const char* input)
 {
     if (!input) return NULL;
@@ -631,8 +620,6 @@ void CommandDf(void)
            numberOfBlocks, used, freeBlockCount, percent);
 }
 
-/* ------------------------------- Shutdown --------------------------------- */
-
 void ShutdownAll(void)
 {
     if (rootDirectory)
@@ -656,9 +643,7 @@ void ShutdownAll(void)
     freeListHead = freeListTail = NULL;
     freeBlockCount = 0;
 }
-
-/* ------------------------------- Main loop -------------------------------- */
-
+ 
 int main(void)
 {
     InitializeFreeBlocks();
