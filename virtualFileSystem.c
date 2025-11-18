@@ -39,6 +39,10 @@ void initializeFreeBlock()
     for (int index = 0; index < MAX_NUM_BLOCKS; index++)
     {
         FreeBlock* block = (FreeBlock*)malloc(sizeof(FreeBlock));
+        if(block==NULL)
+        {
+            return;
+        }
         block->index = index;
         block->next = NULL;
         block->prev = previous;
@@ -58,6 +62,10 @@ void initializeFileSystem()
 {
     initializeFreeBlock();
     root = (FileNode*)malloc(sizeof(FileNode));
+    if(root==NULL)
+    {
+        return;
+    }
     root->isDirectory = 1;
     root->parent = NULL;
     root->child = NULL;
@@ -98,6 +106,10 @@ void freeFileBlocks(FileNode* file)
         if (blockIndex >= 0)
         {
             FreeBlock* newFreeBlock = (FreeBlock*)malloc(sizeof(FreeBlock));
+            if(newFreeBlock==NULL)
+            {
+                return;
+            }
             newFreeBlock->index = blockIndex;
             newFreeBlock->next = freeListHead;
             newFreeBlock->prev = NULL;
@@ -120,7 +132,7 @@ void mkdir(char* name)
     {
         do
         {
-            if (strcmp(node->name, name) == 0)
+            if (strcmp(node->name, name) == 0 && node->isDirectory)
             {
                 printf("Directory with name %s already exists.\n", name);
                 return;
@@ -129,6 +141,10 @@ void mkdir(char* name)
         } while (node != cwd->child);
     }
     FileNode* newDirectory = (FileNode*)malloc(sizeof(FileNode));
+    if(newDirectory==NULL)
+    {
+         return;
+    }
     strncpy(newDirectory->name, name, MAX_NAME_LENGTH - 1);
     newDirectory->name[MAX_NAME_LENGTH - 1] = '\0';
     newDirectory->isDirectory = 1;
@@ -255,6 +271,10 @@ void create(char* name)
         } while (node != cwd->child);
     }
     FileNode* newFile = (FileNode*)malloc(sizeof(FileNode));
+    if(newFile==NULL)
+    {
+        return;
+    }
     strncpy(newFile->name, name, MAX_NAME_LENGTH - 1);
     newFile->name[MAX_NAME_LENGTH - 1] = '\0';
     newFile->isDirectory = 0;
