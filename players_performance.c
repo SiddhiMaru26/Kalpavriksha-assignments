@@ -343,7 +343,7 @@ void DisplayPlayer()
     int inputValue = 0;
     int result = 0;
 
-    printf("Enter Team ID (1..%d): ", teamsCount);
+    printf("Enter Team ID: ");
     result = scanf("%d", &inputValue);
 
     if (result != 1)
@@ -353,7 +353,7 @@ void DisplayPlayer()
         return;
     }
 
-    if (!validateInput(inputValue, 1, teamsCount))
+    if (!validateTeamId(inputValue))
     {
         printf("Error: Team ID must be between 1 and %d\n", teamsCount);
         return;
@@ -369,20 +369,25 @@ void DisplayPlayer()
 
     Team *team = &teamsAll[teamIndex];
     printf("\nPlayers of Team %s (ID %d)\n", team->name, team->id);
-    printf("====================================================================================\n");
-    printf("ID   Name                      Role        Runs   Avg   SR    Wkts  ER   Perf.Index\n");
-    printf("====================================================================================\n");
+    printf("=========================================================================================\n");
+    printf("%-6s %-20s %-15s %-12s %6s %6s %6s %6s %6s %12s\n",
+           "ID", "Name", "Team", "Role", "Runs", "Avg", "SR", "Wkts", "ER", "Perf.Index");
+    printf("=========================================================================================\n");
 
     PlayerNode *node = team->playerHead;
 
     while (node != NULL)
     {
         PlayerModel *player = &playersAll[node->playerIndex];
-        char *roleName = (player->role == ROLE_BATSMAN) ? "Batsman" : (player->role == ROLE_BOWLER ? "Bowler" : "All-Rounder");
+        char roleName[MAX_NAME_LENGTH];
+        if (player->role == ROLE_BATSMAN) strcpy(roleName, "Batsman");
+        else if (player->role == ROLE_BOWLER) strcpy(roleName, "Bowler");
+        else strcpy(roleName, "All-Rounder");
 
-        printf("%-4d %-25s %-10s %-6d %-5.1f %-5.1f %-5d %-4.1f %-8.2f\n",
+        printf("%-6d %-20s %-15s %-12s %6d %6.1f %6.1f %6d %6.1f %12.2f\n",
                player->id,
                player->name,
+               player->teamName,
                roleName,
                player->runs,
                player->average,
@@ -394,9 +399,9 @@ void DisplayPlayer()
         node = node->next;
     }
 
-    printf("====================================================================================\n");
+    printf("=========================================================================================\n");
     printf("Total Players: %d\n", team->totalPlayers);
-    printf("Average Batting Strike Rate: %.2f\n", team->averageBattingStrikeRate);
+    printf("Average Batting Strike Rate: %.2f\n\n", team->averageBattingStrikeRate);
 }
 
 void DisplayBYaverageStirke()
@@ -416,20 +421,20 @@ void DisplayBYaverageStirke()
 
     printf("\nTeams Sorted by Average Batting Strike Rate\n");
     printf("=========================================================\n");
-    printf("ID   Team Name            Avg Bat SR   Total Players\n");
+    printf("%-4s %-20s %12s %14s\n", "ID", "Team Name", "Avg Bat SR", "Total Players");
     printf("=========================================================\n");
 
     for (index = 0; index < teamsCount; index++)
     {
         int teamPrintIndex = orderArray[index];
-        printf("%d %s %.1f %d\n",
+        printf("%-4d %-20s %12.1f %14d\n",
                teamsAll[teamPrintIndex].id,
                teamsAll[teamPrintIndex].name,
                teamsAll[teamPrintIndex].averageBattingStrikeRate,
                teamsAll[teamPrintIndex].totalPlayers);
     }
 
-    printf("=========================================================\n");
+    printf("=========================================================\n\n");
 }
 
 void DisplayTopKPlayers()
@@ -441,30 +446,42 @@ void DisplayTopKPlayers()
     printf("Enter Team ID: ");
     if (scanf("%d", &teamId) != 1)
     {
-        printf("Error\n");
+        printf("Error: Team ID must be an integer\n");
         while (getchar() != '\n') { }
         return;
     }
 
-    if (!validateInput(teamId, 1, teamsCount))
+    if (!validateTeamId(teamId))
     {
-        printf("Error: team id out of range\n");
+        printf("Error: Team ID must be between 1 and %d\n", teamsCount);
         return;
     }
 
     printf("Enter Role (1-Batsman,2-Bowler,3-All-rounder): ");
     if (scanf("%d", &role) != 1)
     {
-        printf("Error\n");
+        printf("Error: Role must be an integer (1-3)\n");
         while (getchar() != '\n') { }
+        return;
+    }
+
+    if (!validateInput(role, 1, 3))
+    {
+        printf("Error: Role must be 1, 2, or 3\n");
         return;
     }
 
     printf("Enter number of players: ");
     if (scanf("%d", &k) != 1)
     {
-        printf("Error\n");
+        printf("Error: Number of players must be an integer\n");
         while (getchar() != '\n') { }
+        return;
+    }
+
+    if (k <= 0)
+    {
+        printf("Error: Number of players must be greater than 0\n");
         return;
     }
 
@@ -489,7 +506,7 @@ void DisplayTopKPlayers()
 
     if (count == 0)
     {
-        printf("No players found\n");
+        printf("No players found\n\n");
         return;
     }
 
@@ -517,21 +534,25 @@ void DisplayTopKPlayers()
         k = count;
     }
 
-    printf("Top %d players of Team %s:\n", k, teamsAll[teamIndex].name);
-    printf("====================================================================================\n");
-    printf("ID   Name                      Role        Runs   Avg   SR    Wkts  ER   Perf.Index\n");
-    printf("====================================================================================\n");
+    printf("\nTop %d players of Team %s (Role %d):\n", k, teamsAll[teamIndex].name, role);
+    printf("=========================================================================================\n");
+    printf("%-6s %-20s %-12s %6s %6s %6s %6s %6s %12s\n",
+           "ID", "Name", "Role", "Runs", "Avg", "SR", "Wkts", "ER", "Perf.Index");
+    printf("=========================================================================================\n");
 
     for (index = 0; index < k; index++)
     {
         PlayerModel *player = &playersAll[tempIndices[index]];
-        char *roleName = (player->role == ROLE_BATSMAN) ? "Batsman" : (player->role == ROLE_BOWLER ? "Bowler" : "All-Rounder");
+        char roleName[MAX_NAME_LENGTH];
+        if (player->role == ROLE_BATSMAN) strcpy(roleName, "Batsman");
+        else if (player->role == ROLE_BOWLER) strcpy(roleName, "Bowler");
+        else strcpy(roleName, "All-Rounder");
 
-      printf("%-4d %-25s %-10s %-6d %-5.1f %-5.1f %-5d %-4.1f %-8.2f\n",
+        printf("%-6d %-20s %-12s %6d %6.1f %6.1f %6d %6.1f %12.2f\n",
                player->id, player->name, roleName, player->runs, player->average, player->strikeRate, player->wickets, player->economy, player->performance);
     }
 
-    printf("====================================================================================\n");
+    printf("=========================================================================================\n\n");
 }
 
 void DisplayAllPlayersByRole()
@@ -540,8 +561,14 @@ void DisplayAllPlayersByRole()
     printf("Enter Role (1-Batsman,2-Bowler,3-All-rounder): ");
     if (scanf("%d", &role) != 1)
     {
-        printf("Error\n");
+        printf("Error: Role must be an integer (1-3)\n");
         while (getchar() != '\n') { }
+        return;
+    }
+
+    if (!validateInput(role, 1, 3))
+    {
+        printf("Error: Role must be 1, 2, or 3\n");
         return;
     }
 
@@ -559,7 +586,7 @@ void DisplayAllPlayersByRole()
 
     if (count == 0)
     {
-        printf("No players found\n");
+        printf("No players found\n\n");
         return;
     }
 
@@ -582,29 +609,38 @@ void DisplayAllPlayersByRole()
         }
     }
 
-    printf("====================================================================================\n");
-    printf("ID   Name                      Team            Role        Runs   Avg   SR    Wkts  ER   Perf.Index\n");
-    printf("====================================================================================\n");
+    printf("\nPlayers of role %d across all teams:\n", role);
+    printf("=========================================================================================\n");
+    printf("%-6s %-20s %-15s %-12s %6s %6s %6s %6s %6s %12s\n",
+           "ID", "Name", "Team", "Role", "Runs", "Avg", "SR", "Wkts", "ER", "Perf.Index");
+    printf("=========================================================================================\n");
 
     for (index = 0; index < count; index++)
     {
         PlayerModel *player = &playersAll[tempIndices[index]];
-        char *roleName = (player->role == ROLE_BATSMAN) ? "Batsman" : (player->role == ROLE_BOWLER ? "Bowler" : "All-Rounder");
+        char roleName[MAX_NAME_LENGTH];
+        if (player->role == ROLE_BATSMAN) strcpy(roleName, "Batsman");
+        else if (player->role == ROLE_BOWLER) strcpy(roleName, "Bowler");
+        else strcpy(roleName, "All-Rounder");
 
-        printf("%-4d %-25s %-10s %-6d %-5.1f %-5.1f %-5d %-4.1f %-8.2f\n",
+        printf("%-6d %-20s %-15s %-12s %6d %6.1f %6.1f %6d %6.1f %12.2f\n",
                player->id, player->name, player->teamName, roleName, player->runs, player->average, player->strikeRate, player->wickets, player->economy, player->performance);
     }
 
-    printf("====================================================================================\n");
+    printf("=========================================================================================\n\n");
 }
 
 void printMenu()
 {
-    printf("\n1. Display Players of a Specific Team\n");
+    printf("==============================================================================\n");
+    printf("ICC ODI Player Performance Analyzer\n");
+    printf("==============================================================================\n");
+    printf("1. Display Players of a Specific Team\n");
     printf("2. Display Teams by Average Batting Strike Rate\n");
     printf("3. Display Top K Players of a Specific Team by Role\n");
-    printf("4. Display All Players of specific role Across All Teams by performance index\n");
+    printf("4. Display all Players of specific role Across All Teams by performance index\n");
     printf("5. Exit\n");
+    printf("==============================================================================\n");
     printf("Enter your choice: ");
 }
 
