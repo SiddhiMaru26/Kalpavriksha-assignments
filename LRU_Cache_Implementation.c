@@ -64,17 +64,7 @@ bool isValidValue(char *value)
     {
         return false;
     }
-
-    int length = strlen(value);
-    for (int index = 0; index < length; ++index)
-    {
-        char charcter = value[index];
-        if ((charcter >= 'A' && charcter <= 'Z') || (charcter >= 'a' && charcter <= 'z'))
-        {
-            return true;
-        }
-    }
-    return false;
+    return true;
 }
 
 char * stringDuplicate(char *source)
