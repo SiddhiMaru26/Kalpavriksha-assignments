@@ -211,7 +211,7 @@ bool isValidName(const char *name)
     for (int index = 0; name[index]; index++)
     {
         unsigned char ch = (unsigned char)name[index];
-        if (!( (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ))
+        if (!((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')))
         {
             return false;
         }
@@ -253,31 +253,19 @@ int main()
         return 1;
     }
 
-    int index = 0;
-    while (index < HASHMAP_SIZE)
-    {
+    for (int index = 0; index < HASHMAP_SIZE; index++)
         hashmap[index] = NULL;
-        index++;
-    }
 
-    Queue readyQueue;
-    Queue waitingQueue;
-    Queue terminatedQueue;
+    Queue readyQueue, waitingQueue, terminatedQueue;
     initQueue(&readyQueue);
     initQueue(&waitingQueue);
     initQueue(&terminatedQueue);
 
     printf("Enter each process: <name> <pid> <cpu> <io_start or -> <io_duration or ->\n");
 
-    index = 0;
-    while (index < numberOfProcesses)
+    for (int index = 0; index < numberOfProcesses; index++)
     {
-        char name[NAME_MAX];
-        char pidToken[32];
-        char cpuToken[32];
-        char ioStartToken[32];
-        char ioDurToken[32];
-
+        char name[NAME_MAX], pidToken[32], cpuToken[32], ioStartToken[32], ioDurToken[32];
         if (scanf("%s %s %s %s %s", name, pidToken, cpuToken, ioStartToken, ioDurToken) != 5)
         {
             printf("Invalid process input\n");
@@ -302,10 +290,8 @@ int main()
         int pidValue = atoi(pidToken);
         int cpuBurst = atoi(cpuToken);
 
-        int ioStart = 0;
-        int ioDur = 0;
-        bool ioStartIsDash = false;
-        bool ioDurIsDash = false;
+        int ioStart = 0, ioDur = 0;
+        bool ioStartIsDash = false, ioDurIsDash = false;
 
         if (!parseIoTokenBool(ioStartToken, &ioStart, &ioStartIsDash) ||
             !parseIoTokenBool(ioDurToken, &ioDur, &ioDurIsDash))
@@ -325,13 +311,11 @@ int main()
 
         strncpy(pcb->processName, name, NAME_MAX - 1);
         pcb->processName[NAME_MAX - 1] = '\0';
-
         pcb->pid = pidValue;
         pcb->totalCpuBurst = cpuBurst;
         pcb->remainingCpuBurst = cpuBurst;
         pcb->ioStartAfterCpu = (ioStartIsDash || ioDurIsDash) ? 0 : ioStart;
         pcb->ioDuration = (ioStartIsDash || ioDurIsDash) ? 0 : ioDur;
-
         pcb->remainingIo = 0;
         pcb->cpuExecuted = 0;
         pcb->actualIoTime = 0;
@@ -344,8 +328,6 @@ int main()
 
         hashmapPut(pcb);
         enqueue(&readyQueue, pcb);
-
-        index++;
     }
 
     int numberOfKillEvents = 0;
@@ -368,13 +350,9 @@ int main()
             return 1;
         }
 
-        index = 0;
-        while (index < numberOfKillEvents)
+        for (int index = 0; index < numberOfKillEvents; index++)
         {
-            char killWord[8];
-            char pidToken[32];
-            char timeToken[32];
-
+            char killWord[8], pidToken[32], timeToken[32];
             if (scanf("%s %s %s", killWord, pidToken, timeToken) != 3 ||
                 strcmp(killWord, "KILL") != 0)
             {
@@ -394,8 +372,6 @@ int main()
 
             killEvents[index].pid = atoi(pidToken);
             killEvents[index].killTime = atoi(timeToken);
-
-            index++;
         }
     }
 
@@ -405,18 +381,15 @@ int main()
 
     while (terminatedCount < numberOfProcesses)
     {
-        int eventIndex = 0;
-        while (eventIndex < numberOfKillEvents)
+        for (int index = 0; index < numberOfKillEvents; index++)
         {
-            if (killEvents[eventIndex].killTime == currentTime)
+            if (killEvents[index].killTime == currentTime)
             {
-                ProcessControlBlock *target = hashmapGet(killEvents[eventIndex].pid);
+                ProcessControlBlock *target = hashmapGet(killEvents[index].pid);
                 if (target && target->state != STATE_TERMINATED && target->state != STATE_KILLED)
                 {
                     if (runningProcess == target)
-                    {
                         runningProcess = NULL;
-                    }
                     removeFromQueueByPid(&readyQueue, target->pid);
                     removeFromQueueByPid(&waitingQueue, target->pid);
                     target->state = STATE_KILLED;
@@ -426,17 +399,13 @@ int main()
                     terminatedCount++;
                 }
             }
-            eventIndex++;
         }
 
         if (!runningProcess)
         {
-            ProcessControlBlock *nextReady = dequeue(&readyQueue);
-            if (nextReady)
-            {
-                nextReady->state = STATE_RUNNING;
-                runningProcess = nextReady;
-            }
+            runningProcess = dequeue(&readyQueue);
+            if (runningProcess)
+                runningProcess->state = STATE_RUNNING;
         }
 
         if (runningProcess)
@@ -473,8 +442,7 @@ int main()
         }
 
         int waitCount = waitingQueue.length;
-        int moveIndex = 0;
-        while (moveIndex < waitCount)
+        for (int index = 0; index < waitCount; index++)
         {
             ProcessControlBlock *pcb = dequeue(&waitingQueue);
             if (pcb->remainingIo <= 0 && pcb->state != STATE_TERMINATED && pcb->state != STATE_KILLED)
@@ -486,13 +454,10 @@ int main()
             {
                 enqueue(&waitingQueue, pcb);
             }
-            moveIndex++;
         }
 
         if (!runningProcess && readyQueue.length == 0 && waitingQueue.length == 0)
-        {
             break;
-        }
 
         currentTime++;
     }
@@ -500,8 +465,7 @@ int main()
     ProcessControlBlock **allList = malloc(sizeof(ProcessControlBlock *) * numberOfProcesses);
     int collected = 0;
 
-    index = 0;
-    while (index < HASHMAP_SIZE)
+    for (int index = 0; index < HASHMAP_SIZE; index++)
     {
         ProcessControlBlock *cursor = hashmap[index];
         while (cursor)
@@ -509,36 +473,43 @@ int main()
             allList[collected++] = cursor;
             cursor = cursor->nextInHash;
         }
-        index++;
     }
 
     qsort(allList, collected, sizeof(ProcessControlBlock *), comparePids);
 
-    index = 0;
-    while (index < collected)
+    // --- FIXED WAITING TIME CALCULATION ---
+    for (int index = 0; index < collected; index++)
     {
         ProcessControlBlock *pcb = allList[index];
-        int tat = (pcb->completionTime >= 0) ? pcb->completionTime - pcb->arrivalTime : 0;
-        pcb->waitingTime = tat - pcb->totalCpuBurst;
-        index++;
+        int tat = 0, wt = 0;
+
+        if (pcb->state == STATE_KILLED)
+        {
+            tat = pcb->killedAtTime - pcb->arrivalTime;
+            wt = tat - pcb->cpuExecuted;
+            if (wt < 0)
+                wt = 0;
+        }
+        else
+        {
+            tat = pcb->completionTime - pcb->arrivalTime;
+            wt = tat - pcb->totalCpuBurst;
+        }
+
+        pcb->waitingTime = wt;
     }
 
     int showStatus = (numberOfKillEvents > 0);
 
     if (showStatus)
-    {
         printf("\nFinal process table:\nPID   Name                 CPU   IO    Status          Turnaround   Waiting\n");
-    }
     else
-    {
         printf("\nFinal process table:\nPID   Name                 CPU   IO    Turnaround   Waiting\n");
-    }
 
-    index = 0;
-    while (index < collected)
+    for (int index = 0; index < collected; index++)
     {
         ProcessControlBlock *pcb = allList[index];
-        int tat = (pcb->completionTime >= 0) ? pcb->completionTime - pcb->arrivalTime : 0;
+        int tat = (pcb->completionTime >= 0) ? ((pcb->state == STATE_KILLED) ? pcb->killedAtTime - pcb->arrivalTime : pcb->completionTime - pcb->arrivalTime) : 0;
 
         if (showStatus)
         {
@@ -550,8 +521,6 @@ int main()
         {
             printf("%-5d %-20s %-5d %-5d %-11d %-7d\n", pcb->pid, pcb->processName, pcb->totalCpuBurst, pcb->actualIoTime, tat, pcb->waitingTime);
         }
-
-        index++;
     }
 
     free(allList);
