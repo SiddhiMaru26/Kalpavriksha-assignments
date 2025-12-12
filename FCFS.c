@@ -1,720 +1,637 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdbool.h>
 
-#define MAX_HASHMAP_SIZE 100
-#define MAX_NAME_LENGTH 50
-#define MAX_INPUT_LENGTH 100
-#define MAX_NUMBER_LENGTH 5
+#define HASH_MAP_SIZE 1009
+#define MAX_NAME_LEN 64
+#define MAX_PROCESSES 1000
+#define MAX_KILL_EVENTS 1000
+#define MAX_INTEGER_LENGTH 16
 
 typedef enum
 {
-    STATE_NEW,
-    STATE_READY,
-    STATE_RUNNING,
-    STATE_WAITING,
-    STATE_TERMINATED,
-    STATE_KILLED
-} ProcessState;
+    READY,
+    RUNNING,
+    WAITING,
+    TERMINATED
+} State;
 
 typedef struct PCB
 {
-    int processId;
-    char processName[MAX_NAME_LENGTH];
-    int arrivalTime;
-    int burstTime;
-    int remainingBurstTime;
-    int currentBurstTime;
-    int ioStartTime;
-    int ioDurationTime;
-    int currentIOTime;
-    int remainingIOTime;
-    int completionTime;
-    ProcessState state;
-    int executionTime;
-    int ioJustStartedFlag;
-    bool isKilled;
+    char name[MAX_NAME_LEN];
+    int pid;
+    int cpu_burst;
+    int cpu_remaining;
+    int io_start;
+    int io_duration;
+    int io_remaining;
+    int executed_time;
+    int completion_time;
+    int io_time_total;
+    int killed;
+    int killed_time;
+    State state;
     struct PCB *next;
 } PCB;
 
-typedef struct QueueNode
-{
-    PCB *pcb;
-    struct QueueNode *next;
-} QueueNode;
-
 typedef struct Queue
 {
-    QueueNode *front;
-    QueueNode *rear;
-    int size;
+    PCB *front;
+    PCB *rear;
 } Queue;
+
+typedef struct HashMapNode
+{
+    int key;
+    PCB *process;
+    struct HashMapNode *next;
+} HashMapNode;
 
 typedef struct KillEvent
 {
-    int processId;
-    int killTime;
-    struct KillEvent *next;
+    int pid;
+    int time;
 } KillEvent;
 
-PCB *HashMap[MAX_HASHMAP_SIZE];
-KillEvent *KillHead = NULL;
+HashMapNode *hashMap[HASH_MAP_SIZE];
+Queue readyQueue;
+Queue waitingQueue;
+Queue terminatedQueue;
+PCB *processList[MAX_PROCESSES];
+KillEvent killEvents[MAX_KILL_EVENTS];
+int processCount = 0;
+int killEventCount = 0;
+int totalProcesses = 0;
 
-void InitializeQueue(Queue *queue)
+int hashFunction(int key)
 {
-    queue->front = NULL;
-    queue->rear = NULL;
-    queue->size = 0;
+    int hashValue = key % HASH_MAP_SIZE;
+    return (hashValue < 0 ? hashValue + HASH_MAP_SIZE : hashValue);
 }
 
-int HashFunction(int processId)
+void hashPut(int key, PCB *process)
 {
-    int index = processId % MAX_HASHMAP_SIZE;
-    if (index < 0)
+    int index = hashFunction(key);
+    HashMapNode *current = hashMap[index];
+
+    while (current)
     {
-        index += MAX_HASHMAP_SIZE;
-    }
-    return index;
-}
-
-void InsertPCBInHash(PCB *pcb)
-{
-    int index = HashFunction(pcb->processId);
-    pcb->next = HashMap[index];
-    HashMap[index] = pcb;
-}
-
-PCB *GetPCBFromHash(int processId)
-{
-    int index = HashFunction(processId);
-    PCB *currentPCB = HashMap[index];
-    while (currentPCB != NULL)
-    {
-        if (currentPCB->processId == processId)
+        if (current->key == key)
         {
-            return currentPCB;
+            return;
         }
-        currentPCB = currentPCB->next;
+
+        current = current->next;
     }
+
+    HashMapNode *node = (HashMapNode *)malloc(sizeof(HashMapNode));
+    node->key = key;
+    node->process = process;
+    node->next = hashMap[index];
+    hashMap[index] = node;
+}
+
+PCB *hashGet(int key)
+{
+    int index = hashFunction(key);
+    HashMapNode *current = hashMap[index];
+
+    while (current)
+    {
+        if (current->key == key)
+        {
+            return current->process;
+        }
+
+        current = current->next;
+    }
+
     return NULL;
 }
 
-void EnqueueProcess(Queue *queue, PCB *pcb)
+void initQueue(Queue *queue)
 {
-    QueueNode *newNode = malloc(sizeof(QueueNode));
-    if (newNode == NULL)
-    {
-        return;
-    }
-    newNode->pcb = pcb;
-    newNode->next = NULL;
+    queue->front = queue->rear = NULL;
+}
 
-    if (queue->rear == NULL)
+void enqueue(Queue *queue, PCB *process)
+{
+    process->next = NULL;
+
+    if (queue->rear)
     {
-        queue->front = queue->rear = newNode;
+        queue->rear->next = process;
+        queue->rear = process;
     }
     else
     {
-        queue->rear->next = newNode;
-        queue->rear = newNode;
+        queue->front = queue->rear = process;
     }
-    queue->size++;
 }
 
-PCB *DequeueProcess(Queue *queue)
+PCB *dequeue(Queue *queue)
 {
-    if (queue->front == NULL)
+    if (!queue->front)
     {
         return NULL;
     }
 
-    QueueNode *nodeToRemove = queue->front;
-    PCB *pcb = nodeToRemove->pcb;
-    queue->front = nodeToRemove->next;
+    PCB *process = queue->front;
+    queue->front = process->next;
 
-    if (queue->front == NULL)
+    if (!queue->front)
     {
         queue->rear = NULL;
     }
 
-    free(nodeToRemove);
-    queue->size--;
-    return pcb;
+    return process;
 }
 
-int RemovePCBFromQueue(Queue *queue, int processId)
+PCB *removeFromQueue(Queue *queue, int pid)
 {
-    QueueNode *currentNode = queue->front;
-    QueueNode *previousNode = NULL;
+    PCB *current = queue->front;
+    PCB *previous = NULL;
 
-    while (currentNode != NULL)
+    while (current)
     {
-        if (currentNode->pcb->processId == processId)
+        if (current->pid == pid)
         {
-            if (previousNode == NULL)
+            if (previous)
             {
-                queue->front = currentNode->next;
+                previous->next = current->next;
             }
             else
             {
-                previousNode->next = currentNode->next;
+                queue->front = current->next;
             }
 
-            if (currentNode == queue->rear)
+            if (current == queue->rear)
             {
-                queue->rear = previousNode;
+                queue->rear = previous;
             }
 
-            free(currentNode);
-            queue->size--;
-            return 1;
+            current->next = NULL;
+            return current;
         }
 
-        previousNode = currentNode;
-        currentNode = currentNode->next;
+        previous = current;
+        current = current->next;
     }
 
-    return 0;
+    return NULL;
 }
 
-PCB *CreateNewPCB(char *processName, int processId, int burstTime, int ioStartTime, int ioDurationTime)
+void forEachQueue(Queue *queue, void (*callback)(PCB *))
 {
-    PCB *newPCB = malloc(sizeof(PCB));
-    if (newPCB == NULL)
+    PCB *current = queue->front;
+
+    while (current)
     {
-        return NULL;
+        PCB *nextProcess = current->next;
+        callback(current);
+        current = nextProcess;
     }
-
-    newPCB->processId = processId;
-    strcpy(newPCB->processName, processName);
-    newPCB->arrivalTime = 0;
-    newPCB->burstTime = burstTime;
-    newPCB->currentBurstTime = 0;
-    newPCB->remainingBurstTime = burstTime;
-    newPCB->ioStartTime = ioStartTime;
-    newPCB->ioDurationTime = ioDurationTime;
-    newPCB->remainingIOTime = 0;
-    newPCB->currentIOTime = 0;
-    newPCB->completionTime = 0;
-    newPCB->executionTime = 0;
-    newPCB->ioJustStartedFlag = 0;
-    newPCB->isKilled = false;
-    newPCB->state = STATE_NEW;
-    newPCB->next = NULL;
-
-    return newPCB;
 }
 
-bool IsValidInteger(char *value)
+PCB *createPCB(const char *name, int pid, int burst, int io_start, int io_duration)
+{
+    PCB *process = (PCB *)malloc(sizeof(PCB));
+    strcpy(process->name, name);
+    process->pid = pid;
+    process->cpu_burst = burst;
+    process->cpu_remaining = burst;
+    process->io_start = io_start;
+    process->io_duration = io_duration;
+    process->io_remaining = 0;
+    process->io_time_total = io_duration;
+    process->executed_time = 0;
+    process->completion_time = -1;
+    process->killed = 0;
+    process->killed_time = -1;
+    process->state = READY;
+    process->next = NULL;
+    return process;
+}
+
+void trim(char *line)
+{
+    int startIndex = 0;
+    int endIndex = 0;
+
+    while (isspace(line[startIndex]))
+    {
+        startIndex++;
+    }
+
+    while (line[startIndex])
+    {
+        line[endIndex++] = line[startIndex++];
+    }
+
+    line[endIndex] = '\0';
+
+    while (endIndex > 0 && isspace(line[endIndex - 1]))
+    {
+        line[--endIndex] = '\0';
+    }
+}
+
+bool isValidProcessName(char processName[MAX_NAME_LEN])
 {
     int index = 0;
-    while (value[index] != '\0')
+
+    while (processName[index] == ' ')
     {
-        if (!isdigit(value[index]))
-        {
-            return false;
-        }
         index++;
     }
+
+    if (processName[index] == '\0')
+    {
+        printf("Process name can't be empty.\n");
+        return false;
+    }
+
     return true;
 }
 
-bool IsDashOrInteger(char *value)
+bool isValidInteger(char integerValue[MAX_INTEGER_LENGTH])
+{
+    int index = 0;
+
+    if (integerValue[0] == '\0')
+    {
+        return false;
+    }
+
+    while (integerValue[index] != '\0')
+    {
+        if (!isdigit(integerValue[index]))
+        {
+            return false;
+        }
+
+        index++;
+    }
+
+    return true;
+}
+
+bool isDashOrInteger(char value[MAX_INTEGER_LENGTH])
 {
     if (strcmp(value, "-") == 0)
     {
         return true;
     }
-    return IsValidInteger(value);
+
+    return isValidInteger(value);
 }
 
-bool IsValidProcessName(char *processName)
+bool validateProcessInputValues(char processName[MAX_NAME_LEN], char inputedProcessId[MAX_INTEGER_LENGTH], char inputedBurstTime[MAX_INTEGER_LENGTH], char inputedIOStart[MAX_INTEGER_LENGTH], char inputedIODuration[MAX_INTEGER_LENGTH])
 {
-    int index = 0;
-    while (processName[index] == ' ')
-    {
-        index++;
-    }
-    if (processName[index] == '\0')
+    if (!isValidProcessName(processName))
     {
         return false;
     }
+
+    if (!isValidInteger(inputedProcessId))
+    {
+        printf("Invalid input. Process ID must be an integer.\n");
+        return false;
+    }
+
+    if (!isValidInteger(inputedBurstTime))
+    {
+        printf("Invalid input. Burst must be an integer.\n");
+        return false;
+    }
+
+    if (!isDashOrInteger(inputedIOStart))
+    {
+        printf("Invalid input. I/O start must be integer or '-'.\n");
+        return false;
+    }
+
+    if (!isDashOrInteger(inputedIODuration))
+    {
+        printf("Invalid input. I/O duration must be integer or '-'.\n");
+        return false;
+    }
+
+    int pid = atoi(inputedProcessId);
+
+    if (hashGet(pid))
+    {
+        printf("Duplicate PID %d detected.\n", pid);
+        return false;
+    }
+
     return true;
 }
 
-bool ValidateProcessInput(char *processName, char *inputProcessId, char *inputBurstTime, char *inputIOStart, char *inputIODuration)
+bool validateKillEventInputValues(char inputedProcessId[MAX_INTEGER_LENGTH], char inputedTime[MAX_INTEGER_LENGTH])
 {
-    if (!IsValidProcessName(processName))
+    if (!isValidInteger(inputedProcessId))
     {
+        printf("Invalid input. Kill PID must be an integer.\n");
         return false;
     }
-    if (!IsValidInteger(inputProcessId))
+
+    if (!isValidInteger(inputedTime))
     {
+        printf("Invalid input. Kill time must be an integer.\n");
         return false;
     }
-    if (!IsValidInteger(inputBurstTime))
-    {
-        return false;
-    }
-    if (!IsDashOrInteger(inputIOStart))
-    {
-        return false;
-    }
-    if (!IsDashOrInteger(inputIODuration))
-    {
-        return false;
-    }
+
     return true;
 }
 
-bool ValidateKillInput(char *inputProcessId, char *inputTime)
+void parseLine(char *line)
 {
-    if (!IsValidInteger(inputProcessId))
-    {
-        return false;
-    }
-    if (!IsValidInteger(inputTime))
-    {
-        return false;
-    }
-    return true;
-}
+    char firstWord[16];
+    sscanf(line, "%s", firstWord);
 
-bool ValidateInputLine(char *inputLine)
-{
-    if (inputLine[0] == '\0')
+    if (strcasecmp(firstWord, "KILL") == 0)
     {
-        return false;
-    }
-    return true;
-}
+        char killPidStr[MAX_INTEGER_LENGTH];
+        char killTimeStr[MAX_INTEGER_LENGTH];
+        sscanf(line + strlen(firstWord), "%s %s", killPidStr, killTimeStr);
 
-void TakeProcessInput(int totalProcesses, Queue *readyQueue)
-{
-    int processIndex = 0;
-
-    while (processIndex < totalProcesses)
-    {
-        char inputLine[MAX_INPUT_LENGTH];
-        fgets(inputLine, sizeof(inputLine), stdin);
-        inputLine[strcspn(inputLine, "\n")] = '\0';
-
-        if (!ValidateInputLine(inputLine))
+        if (!validateKillEventInputValues(killPidStr, killTimeStr))
         {
-            continue;
+            return;
         }
 
-        char processName[MAX_NAME_LENGTH];
-        char inputProcessId[MAX_NUMBER_LENGTH];
-        char inputBurstTime[MAX_NUMBER_LENGTH];
-        char inputIOStart[MAX_NUMBER_LENGTH];
-        char inputIODuration[MAX_NUMBER_LENGTH];
-
-        int count = sscanf(inputLine, "%s %s %s %s %s",
-                           processName,
-                           inputProcessId,
-                           inputBurstTime,
-                           inputIOStart,
-                           inputIODuration);
-
-        if (count != 5)
-        {
-            continue;
-        }
-
-        if (!ValidateProcessInput(processName, inputProcessId, inputBurstTime, inputIOStart, inputIODuration))
-        {
-            continue;
-        }
-
-        int processId = atoi(inputProcessId);
-        int burstTime = atoi(inputBurstTime);
-        int ioStart = (strcmp(inputIOStart, "-") == 0) ? -1 : atoi(inputIOStart);
-        int ioDuration = (strcmp(inputIODuration, "-") == 0) ? 0 : atoi(inputIODuration);
-
-        PCB *newPCB = CreateNewPCB(processName, processId, burstTime, ioStart, ioDuration);
-        newPCB->state = STATE_READY;
-        InsertPCBInHash(newPCB);
-        EnqueueProcess(readyQueue, newPCB);
-
-        processIndex++;
+        int pid = atoi(killPidStr);
+        int timeValue = atoi(killTimeStr);
+        killEvents[killEventCount].pid = pid;
+        killEvents[killEventCount].time = timeValue;
+        killEventCount++;
+        return;
     }
-}
 
-void AddKillEvent(int processId, int killTime)
-{
-    KillEvent *newNode = malloc(sizeof(KillEvent));
-    if (newNode == NULL)
+    char processName[MAX_NAME_LEN];
+    char ioStartStr[MAX_INTEGER_LENGTH];
+    char ioDurationStr[MAX_INTEGER_LENGTH];
+    char pidStr[MAX_INTEGER_LENGTH];
+    char burstStr[MAX_INTEGER_LENGTH];
+
+    int parsedItems = sscanf(line, "%s %s %s %s %s", processName, pidStr, burstStr, ioStartStr, ioDurationStr);
+
+    if (parsedItems < 3)
     {
         return;
     }
 
-    newNode->processId = processId;
-    newNode->killTime = killTime;
-    newNode->next = NULL;
-
-    if (KillHead == NULL || KillHead->killTime > killTime)
+    if (!validateProcessInputValues(processName, pidStr, burstStr, (parsedItems >= 4) ? ioStartStr : "-", (parsedItems >= 5) ? ioDurationStr : "-"))
     {
-        newNode->next = KillHead;
-        KillHead = newNode;
         return;
     }
 
-    KillEvent *eventIndex = KillHead;
-    while (eventIndex->next != NULL && eventIndex->next->killTime <= killTime)
-    {
-        eventIndex = eventIndex->next;
-    }
+    int pid = atoi(pidStr);
+    int burst = atoi(burstStr);
+    int ioStart = (parsedItems >= 4 && strcmp(ioStartStr, "-") != 0) ? atoi(ioStartStr) : -1;
+    int ioDuration = (parsedItems >= 5 && strcmp(ioDurationStr, "-") != 0) ? atoi(ioDurationStr) : 0;
 
-    newNode->next = eventIndex->next;
-    eventIndex->next = newNode;
+    PCB *process = createPCB(processName, pid, burst, ioStart, ioDuration);
+    processList[processCount++] = process;
+    totalProcesses++;
+    hashPut(pid, process);
+    enqueue(&readyQueue, process);
 }
 
-void TakeKillEventsInput(int totalKillEvents)
+void decrementIO(PCB *process)
 {
-    int killIndex = 0;
-
-    while (killIndex < totalKillEvents)
+    if (process->io_remaining > 0)
     {
-        char inputLine[MAX_INPUT_LENGTH];
-        fgets(inputLine, sizeof(inputLine), stdin);
-        inputLine[strcspn(inputLine, "\n")] = '\0';
-
-        if (!ValidateInputLine(inputLine))
-        {
-            continue;
-        }
-
-        char inputProcessId[MAX_NUMBER_LENGTH];
-        char inputTime[MAX_NUMBER_LENGTH];
-
-        int count = sscanf(inputLine, "KILL %s %s", inputProcessId, inputTime);
-        if (count != 2)
-        {
-            continue;
-        }
-
-        if (!ValidateKillInput(inputProcessId, inputTime))
-        {
-            continue;
-        }
-
-        int processId = atoi(inputProcessId);
-        int killTime = atoi(inputTime);
-        AddKillEvent(processId, killTime);
-        killIndex++;
+        process->io_remaining--;
     }
 }
 
-void ProcessKillEvents(int currentTime, Queue *readyQueue, Queue *waitingQueue, Queue *terminatedQueue, PCB **runningPCB)
+void checkIOCompletion()
 {
-    KillEvent *eventIndex = KillHead;
-    KillEvent *previousEvent = NULL;
+    PCB *previous = NULL;
+    PCB *current = waitingQueue.front;
 
-    while (eventIndex != NULL)
+    while (current)
     {
-        if (eventIndex->killTime == currentTime)
+        PCB *nextProcess = current->next;
+
+        if (current->io_remaining == 0)
         {
-            PCB *targetPCB = GetPCBFromHash(eventIndex->processId);
-            if (targetPCB != NULL && !targetPCB->isKilled && targetPCB->state != STATE_TERMINATED)
+            if (previous)
             {
-                targetPCB->state = STATE_KILLED;
-                targetPCB->isKilled = true;
-                targetPCB->completionTime = currentTime;
-
-                RemovePCBFromQueue(readyQueue, targetPCB->processId);
-                RemovePCBFromQueue(waitingQueue, targetPCB->processId);
-
-                if (*runningPCB != NULL && (*runningPCB)->processId == targetPCB->processId)
-                {
-                    *runningPCB = NULL;
-                }
-
-                EnqueueProcess(terminatedQueue, targetPCB);
-            }
-
-            KillEvent *deleteNode = eventIndex;
-            if (previousEvent == NULL)
-            {
-                KillHead = eventIndex->next;
-                eventIndex = KillHead;
+                previous->next = current->next;
             }
             else
             {
-                previousEvent->next = eventIndex->next;
-                eventIndex = previousEvent->next;
+                waitingQueue.front = current->next;
             }
 
-            free(deleteNode);
-            continue;
-        }
-
-        previousEvent = eventIndex;
-        eventIndex = eventIndex->next;
-    }
-}
-
-void HandleIOTime(Queue *waitingQueue, Queue *readyQueue)
-{
-    QueueNode *nodeIndex = waitingQueue->front;
-    QueueNode *previousNode = NULL;
-
-    while (nodeIndex != NULL)
-    {
-        PCB *pcb = nodeIndex->pcb;
-        QueueNode *nextNode = nodeIndex->next;
-
-        if (pcb->ioJustStartedFlag)
-        {
-            pcb->ioJustStartedFlag = 0;
-        }
-        else if (pcb->remainingIOTime > 0)
-        {
-            pcb->remainingIOTime--;
-        }
-
-        if (pcb->remainingIOTime == 0)
-        {
-            if (!pcb->isKilled)
+            if (current == waitingQueue.rear)
             {
-                pcb->state = STATE_READY;
-                EnqueueProcess(readyQueue, pcb);
+                waitingQueue.rear = previous;
             }
 
-            if (previousNode == NULL)
-            {
-                waitingQueue->front = nodeIndex->next;
-            }
-            else
-            {
-                previousNode->next = nodeIndex->next;
-            }
-
-            if (nodeIndex == waitingQueue->rear)
-            {
-                waitingQueue->rear = previousNode;
-            }
-
-            free(nodeIndex);
-            waitingQueue->size--;
-            nodeIndex = nextNode;
-            continue;
-        }
-
-        previousNode = nodeIndex;
-        nodeIndex = nodeIndex->next;
-    }
-}
-
-void ScheduleProcesses(Queue *readyQueue, Queue *waitingQueue, Queue *terminatedQueue)
-{
-    int currentTime = 0;
-    PCB *runningPCB = NULL;
-
-    while (readyQueue->size > 0 || waitingQueue->size > 0 || runningPCB != NULL)
-    {
-        ProcessKillEvents(currentTime, readyQueue, waitingQueue, terminatedQueue, &runningPCB);
-
-        if (runningPCB == NULL && readyQueue->size > 0)
-        {
-            PCB *dequeuedPCB = DequeueProcess(readyQueue);
-            if (dequeuedPCB != NULL && !dequeuedPCB->isKilled)
-            {
-                runningPCB = dequeuedPCB;
-            }
-            else if (dequeuedPCB != NULL)
-            {
-                EnqueueProcess(terminatedQueue, dequeuedPCB);
-            }
-        }
-
-        if (runningPCB != NULL)
-        {
-            runningPCB->currentBurstTime++;
-            runningPCB->executionTime++;
-            runningPCB->remainingBurstTime--;
-
-            if (runningPCB->currentBurstTime == runningPCB->ioStartTime && runningPCB->ioDurationTime > 0)
-            {
-                runningPCB->state = STATE_WAITING;
-                runningPCB->remainingIOTime = runningPCB->ioDurationTime;
-                runningPCB->currentIOTime = 0;
-                runningPCB->ioJustStartedFlag = 1;
-
-                EnqueueProcess(waitingQueue, runningPCB);
-                runningPCB = NULL;
-            }
-            else if (runningPCB->remainingBurstTime <= 0)
-            {
-                runningPCB->completionTime = currentTime + 1;
-                runningPCB->state = STATE_TERMINATED;
-                EnqueueProcess(terminatedQueue, runningPCB);
-                runningPCB = NULL;
-            }
-        }
-
-        HandleIOTime(waitingQueue, readyQueue);
-        currentTime++;
-    }
-}
-
-void PrintFinalReport(Queue *terminatedQueue)
-{
-    QueueNode *nodeIndex = terminatedQueue->front;
-    int totalPCB = 0;
-
-    while (nodeIndex != NULL)
-    {
-        totalPCB++;
-        nodeIndex = nodeIndex->next;
-    }
-
-    if (totalPCB == 0)
-    {
-        return;
-    }
-
-    PCB *pcbArray[totalPCB];
-    nodeIndex = terminatedQueue->front;
-    int pcbIndex = 0;
-    while (nodeIndex != NULL)
-    {
-        pcbArray[pcbIndex++] = nodeIndex->pcb;
-        nodeIndex = nodeIndex->next;
-    }
-
-    for (int turn = 0; turn < totalPCB - 1; turn++)
-    {
-        for (int index = 0; index < totalPCB - turn - 1; index++)
-        {
-            if (pcbArray[index]->processId > pcbArray[index + 1]->processId)
-            {
-                PCB *temp = pcbArray[index];
-                pcbArray[index] = pcbArray[index + 1];
-                pcbArray[index + 1] = temp;
-            }
-        }
-    }
-
-    printf("\n%-5s %-10s %-5s %-5s %-15s %-12s %-8s\n", "PID", "Name", "CPU", "IO", "Status", "Turnaround", "Waiting");
-
-    for (int pcbIndex = 0; pcbIndex < totalPCB; pcbIndex++)
-    {
-        PCB *pcb = pcbArray[pcbIndex];
-        int cpuTime = pcb->burstTime;
-        int ioTime = pcb->ioDurationTime;
-
-        if (pcb->state == STATE_KILLED)
-        {
-            printf("%-5d %-10s %-5d %-5d KILLED at %-7d %-12s %-8s\n",
-                   pcb->processId,
-                   pcb->processName,
-                   cpuTime,
-                   ioTime,
-                   pcb->completionTime,
-                   "-",
-                   "-");
+            current->state = READY;
+            enqueue(&readyQueue, current);
         }
         else
         {
-            int turnaroundTime = pcb->completionTime - pcb->arrivalTime;
-            int waitingTime = turnaroundTime - cpuTime;
-            printf("%-5d %-10s %-5d %-5d OK%-12s %-12d %-8d\n",
-                   pcb->processId,
-                   pcb->processName,
-                   cpuTime,
-                   ioTime,
-                   "",
-                   turnaroundTime,
-                   waitingTime);
+            previous = current;
         }
+
+        current = nextProcess;
     }
 }
 
-void FreeQueue(Queue *queue)
+void terminatePCB(PCB *process, int current_time)
 {
-    QueueNode *nodeIndex = queue->front;
-    while (nodeIndex != NULL)
-    {
-        QueueNode *nextNode = nodeIndex->next;
-        free(nodeIndex);
-        nodeIndex = nextNode;
-    }
-
-    queue->front = NULL;
-    queue->rear = NULL;
-    queue->size = 0;
+    process->state = TERMINATED;
+    process->completion_time = current_time;
+    enqueue(&terminatedQueue, process);
 }
 
-void FreeAllMemory(Queue *readyQueue, Queue *waitingQueue, Queue *terminatedQueue)
+void applyKillEvents(int current_time, PCB **running_process, int *terminated_count)
 {
-    for (int index = 0; index < MAX_HASHMAP_SIZE; index++)
+    for (int index = 0; index < killEventCount; index++)
     {
-        PCB *pcbIndex = HashMap[index];
-        while (pcbIndex != NULL)
+        if (killEvents[index].time == current_time)
         {
-            PCB *nextPCB = pcbIndex->next;
-            free(pcbIndex);
-            pcbIndex = nextPCB;
+            int pid = killEvents[index].pid;
+            PCB *target = hashGet(pid);
+
+            if (!target || target->state == TERMINATED)
+            {
+                continue;
+            }
+
+            if (*running_process && (*running_process)->pid == pid)
+            {
+                PCB *process = *running_process;
+                *running_process = NULL;
+                process->killed = 1;
+                process->killed_time = current_time;
+                terminatePCB(process, current_time);
+                (*terminated_count)++;
+            }
+            else
+            {
+                PCB *process = removeFromQueue(&readyQueue, pid);
+
+                if (!process)
+                {
+                    process = removeFromQueue(&waitingQueue, pid);
+                }
+
+                if (process)
+                {
+                    process->killed = 1;
+                    process->killed_time = current_time;
+                    terminatePCB(process, current_time);
+                    (*terminated_count)++;
+                }
+            }
         }
-        HashMap[index] = NULL;
     }
+}
 
-    KillEvent *eventIndex = KillHead;
-    while (eventIndex != NULL)
+void scheduleProcesses()
+{
+    int current_time = 0;
+    int terminated_count = 0;
+    PCB *running_process = NULL;
+
+    while (terminated_count < totalProcesses)
     {
-        KillEvent *nextEvent = eventIndex->next;
-        free(eventIndex);
-        eventIndex = nextEvent;
+        applyKillEvents(current_time, &running_process, &terminated_count);
+
+        if (!running_process)
+        {
+            running_process = dequeue(&readyQueue);
+
+            if (running_process)
+            {
+                running_process->state = RUNNING;
+            }
+        }
+
+        if (running_process)
+        {
+            running_process->executed_time++;
+            running_process->cpu_remaining--;
+        }
+
+        forEachQueue(&waitingQueue, decrementIO);
+
+        if (running_process)
+        {
+            if (running_process->cpu_remaining > 0 && running_process->io_start >= 0 && running_process->executed_time == running_process->io_start && running_process->io_duration > 0)
+            {
+                running_process->io_remaining = running_process->io_duration;
+                running_process->state = WAITING;
+                enqueue(&waitingQueue, running_process);
+                running_process = NULL;
+            }
+            else if (running_process->cpu_remaining == 0)
+            {
+                terminatePCB(running_process, current_time + 1);
+                running_process = NULL;
+                terminated_count++;
+            }
+        }
+
+        checkIOCompletion();
+        current_time++;
+    }
+}
+
+int comparePID(const void *a, const void *b)
+{
+    PCB *p1 = *(PCB **)a;
+    PCB *p2 = *(PCB **)b;
+    return p1->pid - p2->pid;
+}
+
+void printResults()
+{
+    PCB *sortedList[MAX_PROCESSES];
+    int killedExist = 0;
+
+    for (int index = 0; index < processCount; index++)
+    {
+        sortedList[index] = processList[index];
+
+        if (sortedList[index]->killed)
+        {
+            killedExist = 1;
+        }
     }
 
-    KillHead = NULL;
+    qsort(sortedList, processCount, sizeof(PCB *), comparePID);
 
-    FreeQueue(readyQueue);
-    FreeQueue(waitingQueue);
-    FreeQueue(terminatedQueue);
+    if (!killedExist)
+    {
+        printf("PID\tName\tCPU\tIO\tTurnaround\tWaiting\n");
+
+        for (int index = 0; index < processCount; index++)
+        {
+            PCB *process = sortedList[index];
+            int turnaround = process->completion_time;
+            int waiting = turnaround - process->cpu_burst;
+            printf("%d\t%s\t%d\t%d\t%d\t\t%d\n", process->pid, process->name, process->cpu_burst, process->io_time_total, turnaround, waiting);
+        }
+    }
+    else
+    {
+        printf("PID\tName\tCPU\tIO\tStatus\t\tTurnaround\tWaiting\n");
+
+        for (int index = 0; index < processCount; index++)
+        {
+            PCB *process = sortedList[index];
+
+            if (process->killed)
+            {
+                printf("%d\t%s\t%d\t%d\tKILLED at %d\t-\t\t-\n", process->pid, process->name, process->cpu_burst, process->io_time_total, process->killed_time);
+            }
+            else
+            {
+                int turnaround = process->completion_time;
+                int waiting = turnaround - process->cpu_burst;
+                printf("%d\t%s\t%d\t%d\tOK\t\t%d\t\t%d\n", process->pid, process->name, process->cpu_burst, process->io_time_total, turnaround, waiting);
+            }
+        }
+    }
 }
 
 int main()
 {
-    int totalProcesses = 0;
-    int totalKillEvents = 0;
+    initQueue(&readyQueue);
+    initQueue(&waitingQueue);
+    initQueue(&terminatedQueue);
 
-    Queue readyQueue;
-    Queue waitingQueue;
-    Queue terminatedQueue;
+    char inputLine[256];
 
-    InitializeQueue(&readyQueue);
-    InitializeQueue(&waitingQueue);
-    InitializeQueue(&terminatedQueue);
-
-    for (int index = 0; index < MAX_HASHMAP_SIZE; index++)
+    while (fgets(inputLine, sizeof(inputLine), stdin))
     {
-        HashMap[index] = NULL;
+        trim(inputLine);
+
+        if (strlen(inputLine) == 0)
+        {
+            break;
+        }
+
+        parseLine(inputLine);
     }
 
-    printf("Enter number of processes: ");
-    scanf("%d", &totalProcesses);
-    getchar();
-
-    TakeProcessInput(totalProcesses, &readyQueue);
-
-    printf("Enter number of kill events: ");
-    scanf("%d", &totalKillEvents);
-    getchar();
-
-    if (totalKillEvents > 0)
+    if (totalProcesses == 0)
     {
-        TakeKillEventsInput(totalKillEvents);
+        printf("No valid processes entered.\n");
+        return 0;
     }
 
-    ScheduleProcesses(&readyQueue, &waitingQueue, &terminatedQueue);
-
-    PrintFinalReport(&terminatedQueue);
-
-    FreeAllMemory(&readyQueue, &waitingQueue, &terminatedQueue);
-
+    scheduleProcesses();
+    printResults();
     return 0;
 }
