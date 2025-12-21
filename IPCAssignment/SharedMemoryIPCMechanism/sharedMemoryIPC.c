@@ -1,48 +1,99 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/shm.h>
 #include <sys/ipc.h>
 #include <unistd.h>
 #include <sys/wait.h>
 
-int main()
+#define MAX_ELEMENTS 100
+
+int getIntegerInput()
 {
-    key_t sharedKey = 5678;
-    int numElements;
-    printf("Enter number of elements: ");
-    scanf("%d", &numElements);
-
-    int sharedId = shmget(sharedKey, sizeof(int) * numElements, 0666 | IPC_CREAT);
-    int *sharedArray = (int*) shmat(sharedId, NULL, 0);
-
-    for (int index = 0; index < numElements; index++)
+    int value;
+    while (1)
     {
-        printf("Enter element %d: ", index + 1);
-        scanf("%d", &sharedArray[index]);
-    }
-
-    int processId = fork();
-
-    if (processId == 0)
-    {
-        for (int pass = 0; pass < numElements - 1; pass++)
+        if (scanf("%d", &value) != 1)
         {
-            for (int index = 0; index < numElements - 1 - pass; index++)
+            while (getchar() != '\n');
+        }
+        else
+        {
+            if (getchar() != '\n')
             {
-                if (sharedArray[index] > sharedArray[index + 1])
-                {
-                    int tempValue = sharedArray[index];
-                    sharedArray[index] = sharedArray[index + 1];
-                    sharedArray[index + 1] = tempValue;
-                }
+                while (getchar() != '\n');
+            }
+            else
+            {
+                return value;
             }
         }
+    }
+}
+
+int readArrayFromUser(int *array)
+{
+    int elementCount;
+    elementCount = getIntegerInput();
+    if (elementCount <= 0 || elementCount > MAX_ELEMENTS)
+    {
+        return -1;
+    }
+    for (int index = 0; index < elementCount; index++)
+    {
+        array[index] = getIntegerInput();
+    }
+    return elementCount;
+}
+
+void sortArray(int *array, int elementCount)
+{
+    for (int pass = 0; pass < elementCount - 1; pass++)
+    {
+        for (int index = 0; index < elementCount - 1 - pass; index++)
+        {
+            if (array[index] > array[index + 1])
+            {
+                int temp = array[index];
+                array[index] = array[index + 1];
+                array[index + 1] = temp;
+            }
+        }
+    }
+}
+
+void executeSharedMemorySorting()
+{
+    key_t sharedKey = 5678;
+    int elementCount;
+    elementCount = getIntegerInput();
+    if (elementCount <= 0 || elementCount > MAX_ELEMENTS)
+    {
+        return;
+    }
+
+    int sharedId = shmget(sharedKey, sizeof(int) * elementCount, 0666 | IPC_CREAT);
+    int *sharedArray = (int*) shmat(sharedId, NULL, 0);
+
+    for (int index = 0; index < elementCount; index++)
+    {
+        sharedArray[index] = getIntegerInput();
+    }
+
+    pid_t processId = fork();
+
+    if (processId < 0)
+    {
+        return;
+    }
+    else if (processId == 0)
+    {
+        sortArray(sharedArray, elementCount);
         shmdt(sharedArray);
     }
     else
     {
         wait(NULL);
-        printf("Sorted Array: ");
-        for (int index = 0; index < numElements; index++)
+        for (int index = 0; index < elementCount; index++)
         {
             printf("%d ", sharedArray[index]);
         }
@@ -50,6 +101,10 @@ int main()
         shmdt(sharedArray);
         shmctl(sharedId, IPC_RMID, NULL);
     }
+}
 
+int main()
+{
+    executeSharedMemorySorting();
     return 0;
 }
