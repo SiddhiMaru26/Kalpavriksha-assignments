@@ -1,87 +1,165 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <netinet/in.h>
+#include <arpa/inet.h>
 
-#define SERVER_PORT 8080
+#define PORT 8080
+#define BUFFER_SIZE 1024
+#define ACCOUNT_FILE "resource/accountDB.txt"
 
-int accountBalance = 1000;
-pthread_mutex_t accountLock;
+#define WITHDRAW 1
+#define DEPOSIT 2
+#define BALANCE 3
+#define EXIT 4
 
-void* handleClientConnection(void* clientSocketPointer)
-{
-    int clientSocket = *(int*)clientSocketPointer;
-    free(clientSocketPointer);
+pthread_mutex_t fileMutex = PTHREAD_MUTEX_INITIALIZER;
 
-    int clientChoice;
-    int transactionAmount;
+typedef struct {
+    int clientSocket;
+    int clientNumber;
+} ClientInfo;
 
-    while(1)
-    {
-        read(clientSocket, &clientChoice, sizeof(int));
-
-        if(clientChoice == 4)
-        {
-            break;
-        }
-
-        if(clientChoice == 1 || clientChoice == 2)
-        {
-            read(clientSocket, &transactionAmount, sizeof(int));
-            pthread_mutex_lock(&accountLock);
-
-            if(clientChoice == 1)
-            {
-                if(transactionAmount > accountBalance)
-                {
-                    transactionAmount = -1;
-                }
-                else
-                {
-                    accountBalance -= transactionAmount;
-                }
-            }
-            else
-            {
-                accountBalance += transactionAmount;
-            }
-
-            pthread_mutex_unlock(&accountLock);
-        }
-
-        int balanceToSend = (clientChoice == 1 && transactionAmount == -1) ? -1 : accountBalance;
-        write(clientSocket, &balanceToSend, sizeof(int));
+float readBalance() {
+    FILE *file = fopen(ACCOUNT_FILE, "r");
+    if (!file) {
+        file = fopen(ACCOUNT_FILE, "w");
+        fprintf(file, "10000.00");
+        fclose(file);
+        return 10000.00;
     }
-
-    close(clientSocket);
-    return NULL;
+    float balance;
+    fscanf(file, "%f", &balance);
+    fclose(file);
+    return balance;
 }
 
-int main()
-{
-    pthread_mutex_init(&accountLock, NULL);
-
-    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-
-    struct sockaddr_in serverAddress;
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = SERVER_PORT;
-    serverAddress.sin_addr.s_addr = INADDR_ANY;
-
-    bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
-    listen(serverSocket, 5);
-
-    while(1)
-    {
-        int* clientSocketPointer = malloc(sizeof(int));
-        *clientSocketPointer = accept(serverSocket, NULL, NULL);
-
-        pthread_t clientThread;
-        pthread_create(&clientThread, NULL, handleClientConnection, clientSocketPointer);
-        pthread_detach(clientThread);
+void writeBalance(float balance) {
+    FILE *file = fopen(ACCOUNT_FILE, "w");
+    if (!file) {
+        return;
     }
+    fprintf(file, "%.2f", balance);
+    fclose(file);
+}
 
+void handleWithdraw(int clientSocket, float amount) {
+    char response[BUFFER_SIZE];
+    pthread_mutex_lock(&fileMutex);
+    float currentBalance = readBalance();
+    if (amount <= 0 || amount > currentBalance) {
+        snprintf(response, BUFFER_SIZE, "FAILED: Invalid or insufficient balance. Current balance: %.2f", currentBalance);
+    } else {
+        float newBalance = currentBalance - amount;
+        writeBalance(newBalance);
+        snprintf(response, BUFFER_SIZE, "SUCCESS: Withdrawn %.2f. New balance: %.2f", amount, newBalance);
+    }
+    pthread_mutex_unlock(&fileMutex);
+    send(clientSocket, response, strlen(response), 0);
+}
+
+void handleDeposit(int clientSocket, float amount) {
+    char response[BUFFER_SIZE];
+    pthread_mutex_lock(&fileMutex);
+    if (amount <= 0) {
+        snprintf(response, BUFFER_SIZE, "FAILED: Invalid amount.");
+    } else {
+        float newBalance = readBalance() + amount;
+        writeBalance(newBalance);
+        snprintf(response, BUFFER_SIZE, "SUCCESS: Deposited %.2f. New balance: %.2f", amount, newBalance);
+    }
+    pthread_mutex_unlock(&fileMutex);
+    send(clientSocket, response, strlen(response), 0);
+}
+
+void handleBalance(int clientSocket) {
+    char response[BUFFER_SIZE];
+    pthread_mutex_lock(&fileMutex);
+    snprintf(response, BUFFER_SIZE, "Current balance: %.2f", readBalance());
+    pthread_mutex_unlock(&fileMutex);
+    send(clientSocket, response, strlen(response), 0);
+}
+
+int processClientRequest(int clientSocket, char *buffer) {
+    int operation;
+    float amount;
+    sscanf(buffer, "%d %f", &operation, &amount);
+    if (operation == WITHDRAW) {
+        handleWithdraw(clientSocket, amount);
+    } else if (operation == DEPOSIT) {
+        handleDeposit(clientSocket, amount);
+    } else if (operation == BALANCE) {
+        handleBalance(clientSocket);
+    } else if (operation == EXIT) {
+        return 0;
+    } else {
+        send(clientSocket, "Invalid operation.", 18, 0);
+    }
+    return 1;
+}
+
+void *handleClient(void *arg) {
+    ClientInfo *clientInfo = (ClientInfo *)arg;
+    int clientSocket = clientInfo->clientSocket;
+    char buffer[BUFFER_SIZE];
+    while (1) {
+        memset(buffer, 0, BUFFER_SIZE);
+        int bytesReceived = recv(clientSocket, buffer, BUFFER_SIZE, 0);
+        if (bytesReceived <= 0) {
+            break;
+        }
+        if (!processClientRequest(clientSocket, buffer)) {
+            break;
+        }
+    }
+    close(clientSocket);
+    free(clientInfo);
+    pthread_exit(NULL);
+}
+
+int createServerSocket() {
+    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    int opt = 1;
+    setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    return serverSocket;
+}
+
+void startServer() {
+    int serverSocket = createServerSocket();
+    struct sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(PORT);
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    if (bind(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
+        close(serverSocket);
+        return;
+    }
+    if (listen(serverSocket, 5) < 0) {
+        close(serverSocket);
+        return;
+    }
+    while (1) {
+        struct sockaddr_in clientAddr;
+        socklen_t addrSize = sizeof(clientAddr);
+        int clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddr, &addrSize);
+        if (clientSocket < 0) {
+            continue;
+        }
+        ClientInfo *clientInfo = (ClientInfo *)malloc(sizeof(ClientInfo));
+        clientInfo->clientSocket = clientSocket;
+        pthread_t thread;
+        if (pthread_create(&thread, NULL, handleClient, clientInfo) != 0) {
+            close(clientSocket);
+            free(clientInfo);
+        } else {
+            pthread_detach(thread);
+        }
+    }
     close(serverSocket);
+}
+
+int main() {
+    startServer();
     return 0;
 }
